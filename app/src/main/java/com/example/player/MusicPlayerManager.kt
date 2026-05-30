@@ -6,6 +6,7 @@ import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.example.data.db.AppDatabase
 import com.example.data.model.SongEntity
@@ -59,6 +60,7 @@ object MusicPlayerManager {
     
     private var currentIndex = -1
     private var originalQueue = listOf<SongEntity>()
+    private var consecutiveErrors = 0
 
     fun init(ctx: Context) {
         if (context != null) return
@@ -151,6 +153,7 @@ object MusicPlayerManager {
         
         if (song.isGenerative) {
             startGenerativeAudio(song)
+            consecutiveErrors = 0
         } else {
             startLocalAudio(song)
         }
@@ -183,21 +186,48 @@ object MusicPlayerManager {
                     seekTo(_currentPosition.value.toInt())
                 }
                 start()
+                consecutiveErrors = 0
                 
                 setOnCompletionListener {
                     onSongCompleted()
                 }
+                setOnErrorListener { _, what, extra ->
+                    Log.e("NocTunePlayer", "MediaPlayer runtime error for ${song.title}: what=$what, extra=$extra")
+                    coroutineScope.launch {
+                        handlePlaybackError()
+                    }
+                    true
+                }
             } catch (e: Exception) {
-                Log.e("NocTunePlayer", "Error preparing local MediaPlayer", e)
-                onSongCompleted() // Skip to next if corrupt
+                Log.e("NocTunePlayer", "Error preparing local MediaPlayer for ${song.title}", e)
+                try { release() } catch (ignored: Exception) {}
+                coroutineScope.launch {
+                    handlePlaybackError()
+                }
             }
         }
     }
 
     private fun startGenerativeAudio(song: SongEntity) {
         generativeSynth.start(song.generativePreset)
-        // Set synth auto-timer if there's no completion callback
-        // Generative songs are endless, but we cap display / completion ticks at the designated song.duration.
+    }
+
+    private suspend fun handlePlaybackError() {
+        consecutiveErrors++
+        val queueSize = _playbackQueue.value.size
+        if (queueSize == 0 || consecutiveErrors >= queueSize || consecutiveErrors > 5) {
+            Log.w("NocTunePlayer", "Too many playback errors ($consecutiveErrors). Stopping playback loops.")
+            consecutiveErrors = 0
+            pausePlayback()
+            withContext(Dispatchers.Main) {
+                context?.let {
+                    Toast.makeText(it, "Unable to play selected tracks. Please verify file accessibility.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            delay(200)
+            nextSong()
+        }
     }
 
     fun pausePlayback() {
@@ -387,14 +417,9 @@ object MusicPlayerManager {
 
     private fun stopAllPlayers() {
         try {
-            mediaPlayer?.apply {
-                if (isPlaying) {
-                    stop()
-                }
-                release()
-            }
+            mediaPlayer?.release()
         } catch (e: Exception) {
-            Log.e("NocTunePlayer", "Error clearing MediaPlayer", e)
+            Log.e("NocTunePlayer", "Error releasing MediaPlayer", e)
         }
         mediaPlayer = null
         generativeSynth.stop()

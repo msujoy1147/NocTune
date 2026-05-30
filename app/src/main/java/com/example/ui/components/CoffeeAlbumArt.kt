@@ -25,20 +25,29 @@ fun CoffeeAlbumArt(
     modifier: Modifier = Modifier,
     isPlaying: Boolean = false
 ) {
-    // Elegant continuous rotation for vinyl when music is playing
-    val infiniteTransition = rememberInfiniteTransition(label = "VinylRotation")
-    val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "Angle"
-    )
+    if (isPlaying) {
+        val infiniteTransition = rememberInfiniteTransition(label = "VinylRotation")
+        val rotationAngle by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(12000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "Angle"
+        )
+        CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = rotationAngle)
+    } else {
+        CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = 0f)
+    }
+}
 
-    val activeStateAngle = if (isPlaying) rotationAngle else 0f
-
+@Composable
+fun CoffeeAlbumArtContent(
+    presetId: String,
+    modifier: Modifier = Modifier,
+    angle: Float
+) {
     // Define colors
     val deepEspresso = Color(0xFF1E1814)
     val darkMocha = Color(0xFF2A211C)
@@ -58,7 +67,7 @@ fun CoffeeAlbumArt(
             val radius = Math.min(width, height) / 2f
 
             // Rotate entire canvas to reflect playback spin
-            rotate(activeStateAngle, center) {
+            rotate(angle, center) {
                 // 1. Draw outer stylized vinyl grooves
                 drawCircle(
                     color = Color(0x28000000),
