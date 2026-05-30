@@ -1,0 +1,6 @@
+{
+  "name": "NocTune",
+  "description": "A gorgeous, luxury coffee-themed offline audio music player designed for speed, beauty, and premium acoustics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
