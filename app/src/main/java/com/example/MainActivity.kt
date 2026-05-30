@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,7 +64,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(
+                android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(
+                android.graphics.Color.TRANSPARENT
+            )
+        )
         
         setContent {
             NocTuneTheme {
@@ -159,168 +167,400 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = deepEspresso,
-        bottomBar = {
-            // Standard Custom Tab BottomNavigation
-            Column(modifier = Modifier.background(deepEspresso)) {
-                // Inline floating mini player sits above bottom navigation bar
-                val activeSong = currentSong
-                if (activeSong != null) {
-                    MiniFloatingPlayer(
-                        song = activeSong,
-                        isPlaying = isPlaying,
-                        onPlayPauseToggle = { viewModel.resumeOrPause() },
-                        onClick = { expandedPlayer = true }
-                    )
-                }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isWideScreen = maxWidth >= 600.dp
 
-                NavigationBar(
-                    containerColor = darkMocha.copy(alpha = 0.9f),
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
+        if (!isWideScreen) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = deepEspresso,
+                bottomBar = {
+                    // Standard Custom Tab BottomNavigation with safe navigation bars padding for all phones
+                    Column(
+                        modifier = Modifier
+                            .background(deepEspresso)
+                            .navigationBarsPadding()
+                    ) {
+                        // Inline floating mini player sits above bottom navigation bar
+                        val activeSong = currentSong
+                        if (activeSong != null) {
+                            MiniFloatingPlayer(
+                                song = activeSong,
+                                isPlaying = isPlaying,
+                                onPlayPauseToggle = { viewModel.resumeOrPause() },
+                                onClick = { expandedPlayer = true }
+                            )
+                        }
+
+                        NavigationBar(
+                            containerColor = darkMocha.copy(alpha = 0.9f),
+                            tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0, 0, 0, 0),
+                            modifier = Modifier
+                                .padding(start = 24.dp, end = 24.dp, bottom = 16.dp, top = 4.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .border(1.dp, Color(0x24B08968), RoundedCornerShape(24.dp))
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        ) {
+                            NavigationBarItem(
+                                selected = currentTab == "home",
+                                onClick = { currentTab = "home" },
+                                icon = { Icon(Icons.Default.Home, contentDescription = "Home tab icon") },
+                                label = { Text("Home", fontSize = 11.sp) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = deepEspresso,
+                                    selectedTextColor = softLatte,
+                                    indicatorColor = softLatte,
+                                    unselectedIconColor = secondaryText,
+                                    unselectedTextColor = secondaryText
+                                ),
+                                modifier = Modifier.testTag("nav_home").coffeeFocusHighlight(CircleShape)
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == "library",
+                                onClick = { currentTab = "library" },
+                                icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library tab icon") },
+                                label = { Text("Library", fontSize = 11.sp) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = deepEspresso,
+                                    selectedTextColor = softLatte,
+                                    indicatorColor = softLatte,
+                                    unselectedIconColor = secondaryText,
+                                    unselectedTextColor = secondaryText
+                                ),
+                                modifier = Modifier.testTag("nav_library").coffeeFocusHighlight(CircleShape)
+                            )
+                            NavigationBarItem(
+                                selected = currentTab == "search",
+                                onClick = { currentTab = "search" },
+                                icon = { Icon(Icons.Default.Search, contentDescription = "Search tab icon") },
+                                label = { Text("Search", fontSize = 11.sp) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = deepEspresso,
+                                    selectedTextColor = softLatte,
+                                    indicatorColor = softLatte,
+                                    unselectedIconColor = secondaryText,
+                                    unselectedTextColor = secondaryText
+                                ),
+                                modifier = Modifier.testTag("nav_search").coffeeFocusHighlight(CircleShape)
+                            )
+                        }
+                    }
+                }
+            ) { innerPadding ->
+                Box(
                     modifier = Modifier
-                        .padding(start = 24.dp, end = 24.dp, bottom = 16.dp, top = 4.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .border(1.dp, Color(0x24B08968), RoundedCornerShape(24.dp))
-                        .fillMaxWidth()
-                        .height(64.dp)
+                        .fillMaxSize()
+                        .padding(innerPadding)
                 ) {
-                    NavigationBarItem(
+                    // Tab router
+                    when (currentTab) {
+                        "home" -> HomeScreen(
+                            recentlyPlayed = recentlyPlayed,
+                            favoriteSongs = favoriteSongs,
+                            mostPlayed = mostPlayed,
+                            lastAdded = lastAdded,
+                            allSongsList = allSongs,
+                            onPlaySong = { s -> viewModel.playSong(s, allSongs) },
+                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        
+                        "library" -> LibraryScreen(
+                            songs = allSongs,
+                            playlists = playlists,
+                            selectedPlaylist = selectedPlaylist,
+                            songsInSelectedPlaylist = songsInSelectedPlaylist,
+                            activeSection = activeLibrarySection,
+                            onSectionChange = { activeLibrarySection = it },
+                            onPlaySong = { s, list -> viewModel.playSong(s, list) },
+                            onSelectPlaylist = { viewModel.selectPlaylist(it) },
+                            onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                            onDeletePlaylist = { viewModel.deletePlaylist(it) },
+                            onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        
+                        "search" -> SearchScreen(
+                            songs = filteredSongs,
+                            query = searchQuery,
+                            onQueryChange = { viewModel.updateSearchQuery(it) },
+                            onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    // Full Expanded Immersive Player Screen (slides up)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = expandedPlayer,
+                        enter = slideInVertically(
+                            initialOffsetY = { it },
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                        ),
+                        exit = slideOutVertically(
+                            targetOffsetY = { it },
+                            animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                        )
+                    ) {
+                        val activeSong = currentSong
+                        if (activeSong != null) {
+                            FullPlayerScreen(
+                                song = activeSong,
+                                isPlaying = isPlaying,
+                                progress = currentProgress,
+                                shuffleEnabled = shuffleEnabled,
+                                repeatMode = repeatMode,
+                                sleepTimerRemainingMs = sleepTimerMs,
+                                stopAfterCurrentEnabled = stopAfterCurrent,
+                                onMinimize = { expandedPlayer = false },
+                                onPlayPause = { viewModel.resumeOrPause() },
+                                onNext = { viewModel.next() },
+                                onPrevious = { viewModel.previous() },
+                                onSeek = { viewModel.seekTo(it) },
+                                onToggleShuffle = { viewModel.toggleShuffle() },
+                                onToggleRepeat = { viewModel.toggleRepeat() },
+                                onToggleFavorite = { viewModel.toggleFavorite() },
+                                onTriggerSleepTimerMenu = { showSleepTimerMenu = true },
+                                onTriggerQueueDrawer = { showQueueDrawer = true }
+                            )
+                        }
+                    }
+
+                    // Sliding active playlist queue Drawer
+                    if (showQueueDrawer) {
+                        ActiveQueueDrawer(
+                            queue = playQueue,
+                            activeSongIndex = playQueue.indexOf(currentSong),
+                            onDismiss = { showQueueDrawer = false },
+                            onPlaySong = { s -> viewModel.playSong(s, playQueue) }
+                        )
+                    }
+                }
+            }
+        } else {
+            // WIDESCREEN / TABLET / TV / LANDSCAPE LAYOUT
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(deepEspresso)
+            ) {
+                // Side Navigation Rail (anchored on left)
+                NavigationRail(
+                    containerColor = darkMocha,
+                    header = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "App logo",
+                                tint = softLatte,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "NocTune",
+                                color = warmCream,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(80.dp)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    NavigationRailItem(
                         selected = currentTab == "home",
                         onClick = { currentTab = "home" },
-                        icon = { Icon(Icons.Default.Home, contentDescription = "Home tab icon") },
-                        label = { Text("Home", fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
+                        icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                        label = { Text("Home", fontSize = 10.sp) },
+                        colors = NavigationRailItemDefaults.colors(
                             selectedIconColor = deepEspresso,
                             selectedTextColor = softLatte,
                             indicatorColor = softLatte,
                             unselectedIconColor = secondaryText,
                             unselectedTextColor = secondaryText
                         ),
-                        modifier = Modifier.testTag("nav_home")
+                        modifier = Modifier.coffeeFocusHighlight(CircleShape)
                     )
-                    NavigationBarItem(
+                    Spacer(modifier = Modifier.height(16.dp))
+                    NavigationRailItem(
                         selected = currentTab == "library",
                         onClick = { currentTab = "library" },
-                        icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library tab icon") },
-                        label = { Text("Library", fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
+                        icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library") },
+                        label = { Text("Library", fontSize = 10.sp) },
+                        colors = NavigationRailItemDefaults.colors(
                             selectedIconColor = deepEspresso,
                             selectedTextColor = softLatte,
                             indicatorColor = softLatte,
                             unselectedIconColor = secondaryText,
                             unselectedTextColor = secondaryText
                         ),
-                        modifier = Modifier.testTag("nav_library")
+                        modifier = Modifier.coffeeFocusHighlight(CircleShape)
                     )
-                    NavigationBarItem(
+                    Spacer(modifier = Modifier.height(16.dp))
+                    NavigationRailItem(
                         selected = currentTab == "search",
                         onClick = { currentTab = "search" },
-                        icon = { Icon(Icons.Default.Search, contentDescription = "Search tab icon") },
-                        label = { Text("Search", fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
+                        icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                        label = { Text("Search", fontSize = 10.sp) },
+                        colors = NavigationRailItemDefaults.colors(
                             selectedIconColor = deepEspresso,
                             selectedTextColor = softLatte,
                             indicatorColor = softLatte,
                             unselectedIconColor = secondaryText,
                             unselectedTextColor = secondaryText
                         ),
-                        modifier = Modifier.testTag("nav_search")
+                        modifier = Modifier.coffeeFocusHighlight(CircleShape)
                     )
+                    Spacer(modifier = Modifier.weight(2f))
                 }
-            }
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Tab router
-            when (currentTab) {
-                "home" -> HomeScreen(
-                    recentlyPlayed = recentlyPlayed,
-                    favoriteSongs = favoriteSongs,
-                    mostPlayed = mostPlayed,
-                    lastAdded = lastAdded,
-                    allSongsList = allSongs,
-                    onPlaySong = { s -> viewModel.playSong(s, allSongs) },
-                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                    modifier = Modifier.fillMaxSize()
-                )
-                
-                "library" -> LibraryScreen(
-                    songs = allSongs,
-                    playlists = playlists,
-                    selectedPlaylist = selectedPlaylist,
-                    songsInSelectedPlaylist = songsInSelectedPlaylist,
-                    activeSection = activeLibrarySection,
-                    onSectionChange = { activeLibrarySection = it },
-                    onPlaySong = { s, list -> viewModel.playSong(s, list) },
-                    onSelectPlaylist = { viewModel.selectPlaylist(it) },
-                    onCreatePlaylistRequest = { showCreatePlaylistInput = true },
-                    onDeletePlaylist = { viewModel.deletePlaylist(it) },
-                    onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
-                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                    modifier = Modifier.fillMaxSize()
-                )
-                
-                "search" -> SearchScreen(
-                    songs = filteredSongs,
-                    query = searchQuery,
-                    onQueryChange = { viewModel.updateSearchQuery(it) },
-                    onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
-                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
 
-            // Full Expanded Immersive Player Screen (slides up)
-            AnimatedVisibility(
-                visible = expandedPlayer,
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                ),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                VerticalDivider(
+                    color = Color(0x24B08968),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
                 )
-            ) {
-                val activeSong = currentSong
-                if (activeSong != null) {
-                    FullPlayerScreen(
-                        song = activeSong,
-                        isPlaying = isPlaying,
-                        progress = currentProgress,
-                        shuffleEnabled = shuffleEnabled,
-                        repeatMode = repeatMode,
-                        sleepTimerRemainingMs = sleepTimerMs,
-                        stopAfterCurrentEnabled = stopAfterCurrent,
-                        onMinimize = { expandedPlayer = false },
-                        onPlayPause = { viewModel.resumeOrPause() },
-                        onNext = { viewModel.next() },
-                        onPrevious = { viewModel.previous() },
-                        onSeek = { viewModel.seekTo(it) },
-                        onToggleShuffle = { viewModel.toggleShuffle() },
-                        onToggleRepeat = { viewModel.toggleRepeat() },
-                        onToggleFavorite = { viewModel.toggleFavorite() },
-                        onTriggerSleepTimerMenu = { showSleepTimerMenu = true },
-                        onTriggerQueueDrawer = { showQueueDrawer = true }
-                    )
+
+                // Main body area (on right of NavigationRail) with safe status and navigation bars padding
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        // Apply center-constrained width to tablet views to keep elements readable
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .widthIn(max = 1000.dp)
+                                .align(Alignment.Center)
+                        ) {
+                            when (currentTab) {
+                                "home" -> HomeScreen(
+                                    recentlyPlayed = recentlyPlayed,
+                                    favoriteSongs = favoriteSongs,
+                                    mostPlayed = mostPlayed,
+                                    lastAdded = lastAdded,
+                                    allSongsList = allSongs,
+                                    onPlaySong = { s -> viewModel.playSong(s, allSongs) },
+                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                
+                                "library" -> LibraryScreen(
+                                    songs = allSongs,
+                                    playlists = playlists,
+                                    selectedPlaylist = selectedPlaylist,
+                                    songsInSelectedPlaylist = songsInSelectedPlaylist,
+                                    activeSection = activeLibrarySection,
+                                    onSectionChange = { activeLibrarySection = it },
+                                    onPlaySong = { s, list -> viewModel.playSong(s, list) },
+                                    onSelectPlaylist = { viewModel.selectPlaylist(it) },
+                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                    onDeletePlaylist = { viewModel.deletePlaylist(it) },
+                                    onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                
+                                "search" -> SearchScreen(
+                                    songs = filteredSongs,
+                                    query = searchQuery,
+                                    onQueryChange = { viewModel.updateSearchQuery(it) },
+                                    onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        // Full Expanded Immersive Player Screen (slides up)
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = expandedPlayer,
+                            enter = slideInVertically(
+                                initialOffsetY = { it },
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                            ),
+                            exit = slideOutVertically(
+                                targetOffsetY = { it },
+                                animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                            )
+                        ) {
+                            val activeSong = currentSong
+                            if (activeSong != null) {
+                                FullPlayerScreen(
+                                    song = activeSong,
+                                    isPlaying = isPlaying,
+                                    progress = currentProgress,
+                                    shuffleEnabled = shuffleEnabled,
+                                    repeatMode = repeatMode,
+                                    sleepTimerRemainingMs = sleepTimerMs,
+                                    stopAfterCurrentEnabled = stopAfterCurrent,
+                                    onMinimize = { expandedPlayer = false },
+                                    onPlayPause = { viewModel.resumeOrPause() },
+                                    onNext = { viewModel.next() },
+                                    onPrevious = { viewModel.previous() },
+                                    onSeek = { viewModel.seekTo(it) },
+                                    onToggleShuffle = { viewModel.toggleShuffle() },
+                                    onToggleRepeat = { viewModel.toggleRepeat() },
+                                    onToggleFavorite = { viewModel.toggleFavorite() },
+                                    onTriggerSleepTimerMenu = { showSleepTimerMenu = true },
+                                    onTriggerQueueDrawer = { showQueueDrawer = true }
+                                )
+                            }
+                        }
+
+                        // Sliding active playlist queue Drawer
+                        if (showQueueDrawer) {
+                            ActiveQueueDrawer(
+                                queue = playQueue,
+                                activeSongIndex = playQueue.indexOf(currentSong),
+                                onDismiss = { showQueueDrawer = false },
+                                onPlaySong = { s -> viewModel.playSong(s, playQueue) }
+                            )
+                        }
+                    }
+
+                    // Mini player sits perfectly at the bottom in widescreen mode
+                    val activeSong = currentSong
+                    if (activeSong != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(deepEspresso)
+                                .padding(horizontal = 24.dp, vertical = 8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .widthIn(max = 600.dp)
+                                    .align(Alignment.Center)
+                            ) {
+                                MiniFloatingPlayer(
+                                    song = activeSong,
+                                    isPlaying = isPlaying,
+                                    onPlayPauseToggle = { viewModel.resumeOrPause() },
+                                    onClick = { expandedPlayer = true }
+                                )
+                            }
+                        }
+                    }
                 }
-            }
-
-            // Sliding active playlist queue Drawer
-            if (showQueueDrawer) {
-                ActiveQueueDrawer(
-                    queue = playQueue,
-                    activeSongIndex = playQueue.indexOf(currentSong),
-                    onDismiss = { showQueueDrawer = false },
-                    onPlaySong = { s -> viewModel.playSong(s, playQueue) }
-                )
             }
         }
     }
@@ -673,7 +913,7 @@ fun LibraryScreen(
                     // Group songs dynamically by album
                     val albumsGroups = songs.groupBy { it.album }
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Adaptive(minSize = 140.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 32.dp),
@@ -686,6 +926,7 @@ fun LibraryScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(darkMocha)
+                                    .coffeeFocusHighlight(RoundedCornerShape(20.dp))
                                     .clickable {
                                         if (albumSongs.isNotEmpty()) {
                                             onPlaySong(albumSongs.first(), albumSongs)
@@ -722,7 +963,7 @@ fun LibraryScreen(
                     // Group songs dynamically by artist
                     val artistGroups = songs.groupBy { it.artist }
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Adaptive(minSize = 140.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(bottom = 32.dp),
@@ -735,6 +976,7 @@ fun LibraryScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(darkMocha)
+                                    .coffeeFocusHighlight(RoundedCornerShape(20.dp))
                                     .clickable {
                                         if (artSongs.isNotEmpty()) {
                                             onPlaySong(artSongs.first(), artSongs)
@@ -793,7 +1035,7 @@ fun LibraryScreen(
                             EmptyStateCard(message = "No custom compilation lists present yet. Initialize one above!")
                         } else {
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
+                                columns = GridCells.Adaptive(minSize = 140.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 contentPadding = PaddingValues(bottom = 32.dp),
@@ -804,6 +1046,7 @@ fun LibraryScreen(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(20.dp))
                                             .background(darkMocha)
+                                            .coffeeFocusHighlight(RoundedCornerShape(20.dp))
                                             .clickable { onSelectPlaylist(playlist) }
                                             .padding(16.dp)
                                     ) {
@@ -945,6 +1188,7 @@ fun PlayableLoungeCard(
                 )
             )
             .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(20.dp))
+            .coffeeFocusHighlight(RoundedCornerShape(20.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -994,6 +1238,7 @@ fun SongListItem(
             .clip(RoundedCornerShape(20.dp))
             .background(darkMocha.copy(alpha = 0.4f))
             .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(20.dp))
+            .coffeeFocusHighlight(RoundedCornerShape(20.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -1162,11 +1407,13 @@ fun FullPlayerScreen(
         String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(deepEspresso)
     ) {
+        val isWide = maxWidth >= 600.dp
+
         // Dynamic Backdrop Glowing Blur based on ambient song themes
         Box(
             modifier = Modifier
@@ -1186,199 +1433,389 @@ fun FullPlayerScreen(
             )
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Header Action controls row
+        if (isWide) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onMinimize, modifier = Modifier.minimumInteractiveComponentSize()) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize full player button", tint = warmCream, modifier = Modifier.size(32.dp))
+                // Left Column: Artwork & Basic Metadata
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(end = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .padding(16.dp)
+                            .graphicsLayer {
+                                shadowElevation = 16f
+                                shape = RoundedCornerShape(20)
+                            }
+                    ) {
+                        CoffeeAlbumArt(
+                            presetId = song.generativePreset,
+                            modifier = Modifier.fillMaxSize(),
+                            isPlaying = isPlaying
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = song.title,
+                        color = warmCream,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = song.artist,
+                        color = softLatte,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                
-                Text(
-                    text = "NocTune Active Lounge",
-                    color = warmCream,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
 
-                Row {
-                    // Sleep lock badge decoration
-                    Box(modifier = Modifier.wrapContentSize(), contentAlignment = Alignment.Center) {
-                        IconButton(onClick = onTriggerSleepTimerMenu, modifier = Modifier.minimumInteractiveComponentSize()) {
-                            Icon(
-                                imageVector = Icons.Default.Snooze,
-                                contentDescription = "Configure sleep countdown trigger",
-                                tint = if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) coffeeBrown else warmCream
-                            )
+                // Right Column: Action controllers, Progress and Status
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(start = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceAround
+                ) {
+                    // Header Actions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onMinimize, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize full player button", tint = warmCream, modifier = Modifier.size(32.dp))
+                        }
+                        Text(
+                            text = "NocTune Active Lounge",
+                            color = warmCream,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row {
+                            IconButton(onClick = onTriggerSleepTimerMenu, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                                Icon(
+                                    imageVector = Icons.Default.Snooze,
+                                    contentDescription = "Configure sleep countdown trigger",
+                                    tint = if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) coffeeBrown else warmCream
+                                )
+                            }
+                            IconButton(onClick = onTriggerQueueDrawer, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                                Icon(Icons.Default.QueueMusic, contentDescription = "Toggle playing queue drawer", tint = warmCream)
+                            }
                         }
                     }
-                    IconButton(onClick = onTriggerQueueDrawer, modifier = Modifier.minimumInteractiveComponentSize()) {
-                        Icon(Icons.Default.QueueMusic, contentDescription = "Toggle playing queue drawer", tint = warmCream)
+
+                    // Sleep Timer Badge
+                    if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) {
+                        val timerLabel = if (sleepTimerRemainingMs > 0) {
+                            val rem = sleepTimerRemainingMs / 1000
+                            String.format("%02d:%02d left", rem / 60, rem % 60)
+                        } else {
+                            "Stop after track"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(coffeeBrown.copy(alpha = 0.25f))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Snooze, contentDescription = "Snooze indicators", tint = softLatte, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = timerLabel, color = softLatte, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Progress Slider
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Slider(
+                            value = if (song.duration > 0) progress.toFloat() / song.duration else 0f,
+                            onValueChange = { percent ->
+                                onSeek((percent * song.duration).toLong())
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = coffeeBrown,
+                                activeTrackColor = coffeeBrown,
+                                inactiveTrackColor = darkMocha
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("player_progress_slider")
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = currentFormatted, color = secondaryText, fontSize = 11.sp)
+                            Text(text = durationFormatted, color = secondaryText, fontSize = 11.sp)
+                        }
+                    }
+
+                    // Primary control decks
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onToggleFavorite, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                            Icon(
+                                imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Toggle favorite state on song",
+                                tint = if (song.isFavorite) Color.Red else warmCream,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Skip previous track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(coffeeBrown)
+                                .coffeeFocusHighlight(CircleShape)
+                                .clickable { onPlayPause() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = "Play icon",
+                                tint = deepEspresso,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Skip next track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                        }
+                        IconButton(
+                            onClick = {
+                                val trigger = (0..1).random()
+                                if (trigger == 0) onToggleShuffle() else onToggleRepeat()
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)
+                        ) {
+                            val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
+                                if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+                            }
+                            val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
+                            Icon(imageVector = icon, contentDescription = "Play order type toggle indicator", tint = tint, modifier = Modifier.size(22.dp))
+                        }
                     }
                 }
             }
-
-            // Central spinning Album Artwork
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .padding(24.dp)
-                    .graphicsLayer {
-                        shadowElevation = 16f
-                        shape = RoundedCornerShape(20)
-                    }
-            ) {
-                CoffeeAlbumArt(
-                    presetId = song.generativePreset,
-                    modifier = Modifier.fillMaxSize(),
-                    isPlaying = isPlaying
-                )
-            }
-
-            // Sleep Timer countdown bubble active visualization
-            if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) {
-                val timerLabel = if (sleepTimerRemainingMs > 0) {
-                    val rem = sleepTimerRemainingMs / 1000
-                    String.format("%02d:%02d left", rem / 60, rem % 60)
-                } else {
-                    "Stop after track"
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(coffeeBrown.copy(alpha = 0.25f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Snooze, contentDescription = "Snooze active indicator link", tint = softLatte, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = timerLabel, color = softLatte, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Metadata: Titles
+        } else {
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp)
+                    .statusBarsPadding()
+                    .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = song.title,
-                    color = warmCream,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = song.artist,
-                    color = softLatte,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Timeline Progress Slider layout
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Slider(
-                    value = if (song.duration > 0) progress.toFloat() / song.duration else 0f,
-                    onValueChange = { percent ->
-                        onSeek((percent * song.duration).toLong())
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = coffeeBrown,
-                        activeTrackColor = coffeeBrown,
-                        inactiveTrackColor = darkMocha
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("player_progress_slider")
-                )
+                // Header Action controls row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = currentFormatted, color = secondaryText, fontSize = 11.sp)
-                    Text(text = durationFormatted, color = secondaryText, fontSize = 11.sp)
-                }
-            }
-
-            // Primary control decks row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Favorite Button
-                IconButton(onClick = onToggleFavorite, modifier = Modifier.minimumInteractiveComponentSize()) {
-                    Icon(
-                        imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Toggle favorite state on song",
-                        tint = if (song.isFavorite) Color.Red else warmCream,
-                        modifier = Modifier.size(24.dp)
+                    IconButton(onClick = onMinimize, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize full player button", tint = warmCream, modifier = Modifier.size(32.dp))
+                    }
+                    
+                    Text(
+                        text = "NocTune Active Lounge",
+                        color = warmCream,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
+
+                    Row {
+                        // Sleep lock badge decoration
+                        Box(modifier = Modifier.wrapContentSize(), contentAlignment = Alignment.Center) {
+                            IconButton(onClick = onTriggerSleepTimerMenu, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                                Icon(
+                                    imageVector = Icons.Default.Snooze,
+                                    contentDescription = "Configure sleep countdown trigger",
+                                    tint = if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) coffeeBrown else warmCream
+                                )
+                            }
+                        }
+                        IconButton(onClick = onTriggerQueueDrawer, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                            Icon(Icons.Default.QueueMusic, contentDescription = "Toggle playing queue drawer", tint = warmCream)
+                        }
+                    }
                 }
 
-                // Previous Button
-                IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize()) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = "Skip previous track button", tint = warmCream, modifier = Modifier.size(36.dp))
-                }
-
-                // Play / Pause Circle Tactile button
+                // Central spinning Album Artwork
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(coffeeBrown)
-                        .clickable { onPlayPause() },
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .padding(24.dp)
+                        .graphicsLayer {
+                            shadowElevation = 16f
+                            shape = RoundedCornerShape(20)
+                        }
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Primary player playback controller",
-                        tint = deepEspresso,
-                        modifier = Modifier.size(36.dp)
+                    CoffeeAlbumArt(
+                        presetId = song.generativePreset,
+                        modifier = Modifier.fillMaxSize(),
+                        isPlaying = isPlaying
                     )
                 }
 
-                // Next Button
-                IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize()) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Skip next track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                // Sleep Timer countdown bubble active visualization
+                if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) {
+                    val timerLabel = if (sleepTimerRemainingMs > 0) {
+                        val rem = sleepTimerRemainingMs / 1000
+                        String.format("%02d:%02d left", rem / 60, rem % 60)
+                    } else {
+                        "Stop after track"
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(coffeeBrown.copy(alpha = 0.25f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Snooze, contentDescription = "Snooze active indicator link", tint = softLatte, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = timerLabel, color = softLatte, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
 
-                // Playback order modes toggles (Shuffle / Repeat)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(
-                        onClick = {
-                            val trigger = (0..1).random()
-                            if (trigger == 0) onToggleShuffle() else onToggleRepeat()
+                // Metadata: Titles
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = song.title,
+                        color = warmCream,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = song.artist,
+                        color = softLatte,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Timeline Progress Slider layout
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Slider(
+                        value = if (song.duration > 0) progress.toFloat() / song.duration else 0f,
+                        onValueChange = { percent ->
+                            onSeek((percent * song.duration).toLong())
                         },
-                        modifier = Modifier.minimumInteractiveComponentSize()
+                        colors = SliderDefaults.colors(
+                            thumbColor = coffeeBrown,
+                            activeTrackColor = coffeeBrown,
+                            inactiveTrackColor = darkMocha
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("player_progress_slider")
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
-                            if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+                        Text(text = currentFormatted, color = secondaryText, fontSize = 11.sp)
+                        Text(text = durationFormatted, color = secondaryText, fontSize = 11.sp)
+                    }
+                }
+
+                // Primary control decks row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 32.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Favorite Button
+                    IconButton(onClick = onToggleFavorite, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                        Icon(
+                            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Toggle favorite state on song",
+                            tint = if (song.isFavorite) Color.Red else warmCream,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Previous Button
+                    IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                        Icon(Icons.Default.SkipPrevious, contentDescription = "Skip previous track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                    }
+
+                    // Play / Pause Circle Tactile button
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(coffeeBrown)
+                            .coffeeFocusHighlight(CircleShape)
+                            .clickable { onPlayPause() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Primary player playback controller",
+                            tint = deepEspresso,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+
+                    // Next Button
+                    IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                        Icon(Icons.Default.SkipNext, contentDescription = "Skip next track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                    }
+
+                    // Playback order modes toggles (Shuffle / Repeat)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = {
+                                val trigger = (0..1).random()
+                                if (trigger == 0) onToggleShuffle() else onToggleRepeat()
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)
+                        ) {
+                            val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
+                                if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+                            }
+                            val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
+                            Icon(imageVector = icon, contentDescription = "Toggle play sequence order type", tint = tint, modifier = Modifier.size(22.dp))
                         }
-                        val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
-                        Icon(imageVector = icon, contentDescription = "Toggle play sequence order type", tint = tint, modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -1477,3 +1914,20 @@ fun ActiveQueueDrawer(
         }
     }
 }
+
+@Composable
+fun Modifier.coffeeFocusHighlight(
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
+    borderColor: Color = Color(0xFFDDB892),
+    borderWidth: androidx.compose.ui.unit.Dp = 2.dp
+): Modifier {
+    var isFocused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { isFocused = it.isFocused }
+        .border(
+            width = if (isFocused) borderWidth else 0.dp,
+            color = if (isFocused) borderColor else Color.Transparent,
+            shape = shape
+        )
+}
+
