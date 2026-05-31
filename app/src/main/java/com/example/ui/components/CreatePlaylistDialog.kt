@@ -17,12 +17,13 @@ fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onCreate: (String) -> Unit
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val deepEspresso = Color(0xFF1E1814)
-    val coffeeBrown = Color(0xFFB08968)
-    val softLatte = Color(0xFFDDB892)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val deepEspresso = appColors.deepEspresso
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     var playlistName by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }

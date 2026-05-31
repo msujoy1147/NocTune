@@ -167,7 +167,7 @@ class NocTunePlayerService : Service() {
                 androidx.media.app.NotificationCompat.MediaStyle()
                     .setShowActionsInCompactView(0, 1, 2)
             )
-            .setColor(0xFF1E1814.toInt()) // Deep Espresso Accent Theme Colour for notification
+            .setColor(0xFF6B4EE0.toInt()) // Soothing Violet Accent Theme Colour for notification
         
         return builder.build()
     }

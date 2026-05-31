@@ -888,13 +888,13 @@ fun LibraryScreen(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isNight) Color(0xFF5F35C2) else Color(0xFFEBEBEB)),
+                                            .background(coffeeBrown.copy(alpha = 0.2f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.MusicNote,
                                             contentDescription = null,
-                                            tint = if (isNight) Color.White else Color.Black,
+                                            tint = softLatte,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -902,7 +902,7 @@ fun LibraryScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = song.title,
-                                            color = if (isActive && isNight) Color(0xFFDCC8FA) else warmCream,
+                                            color = if (isActive) softLatte else warmCream,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1,
@@ -920,7 +920,7 @@ fun LibraryScreen(
                                     if (isActive) {
                                         EqualizerAnimation(
                                             isPlaying = isPlaying,
-                                            color = if (isNight) Color(0xFFB39DDB) else Color.Black,
+                                            color = softLatte,
                                             modifier = Modifier.padding(end = 12.dp)
                                         )
                                     }
@@ -1383,6 +1383,8 @@ fun SongListItem(
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
     val isNight = appColors.isNight
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1392,7 +1394,7 @@ fun SongListItem(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .background(if (isActive) (if (isNight) Color(0x1F9575CD) else Color(0x0F000000)) else Color.Transparent)
+                .background(if (isActive) coffeeBrown.copy(alpha = 0.15f) else Color.Transparent)
                 .padding(vertical = 12.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1401,13 +1403,13 @@ fun SongListItem(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isNight) Color(0xFF5F35C2) else Color(0xFFEBEBEB)),
+                    .background(coffeeBrown.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = if (isNight) Color.White else Color.Black,
+                    tint = softLatte,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -1415,7 +1417,7 @@ fun SongListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
-                    color = if (isActive && isNight) Color(0xFFDCC8FA) else warmCream,
+                    color = if (isActive) softLatte else warmCream,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -1433,7 +1435,7 @@ fun SongListItem(
             if (isActive) {
                 EqualizerAnimation(
                     isPlaying = isPlaying,
-                    color = if (isNight) Color(0xFFB39DDB) else Color.Black,
+                    color = softLatte,
                     modifier = Modifier.padding(end = 12.dp)
                 )
             }
@@ -1569,13 +1571,12 @@ fun FullPlayerScreen(
     onTriggerQueueDrawer: () -> Unit
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
-    val isNight = appColors.isNight
-    val deepEspresso = if (isNight) Color(0xFF130D22) else appColors.deepEspresso
-    val darkMocha = if (isNight) Color(0xFF1E1530) else appColors.darkMocha
-    val coffeeBrown = if (isNight) Color(0xFF5F35C2) else appColors.coffeeBrown
-    val softLatte = if (isNight) Color(0xFFB39DDB) else appColors.softLatte
-    val warmCream = if (isNight) Color(0xFFDCC8FA) else appColors.warmCream
-    val secondaryText = if (isNight) Color(0xFFB39DDB).copy(alpha = 0.7f) else appColors.secondaryText
+    val deepEspresso = appColors.deepEspresso
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     // Formatted timelines
     val currentFormatted = remember(progress) {
@@ -2015,11 +2016,12 @@ fun ActiveQueueDrawer(
     onDismiss: () -> Unit,
     onPlaySong: (SongEntity) -> Unit
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val deepEspresso = Color(0xFF1E1814)
-    val coffeeBrown = Color(0xFFB08968)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val deepEspresso = appColors.deepEspresso
+    val coffeeBrown = appColors.coffeeBrown
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     Box(
         modifier = Modifier

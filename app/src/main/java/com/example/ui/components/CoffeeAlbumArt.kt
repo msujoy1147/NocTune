@@ -107,12 +107,11 @@ fun CoffeeAlbumArtContent(
 ) {
     // Define colors
     val appColors = com.example.ui.theme.LocalAppColors.current
-    val isNight = appColors.isNight
-    val deepEspresso = if (isNight) Color(0xFF130D22) else appColors.deepEspresso
-    val darkMocha = if (isNight) Color(0xFF1E1530) else appColors.darkMocha
-    val coffeeBrown = if (isNight) Color(0xFF5F35C2) else appColors.coffeeBrown
-    val softLatte = if (isNight) Color(0xFFB39DDB) else appColors.softLatte
-    val warmCream = if (isNight) Color(0xFFDCC8FA) else appColors.warmCream
+    val deepEspresso = appColors.deepEspresso
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val warmCream = appColors.warmCream
 
     Box(
         modifier = modifier

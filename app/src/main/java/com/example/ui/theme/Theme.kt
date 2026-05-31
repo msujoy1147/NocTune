@@ -21,12 +21,12 @@ data class AppColors(
 
 val LocalAppColors = staticCompositionLocalOf {
     AppColors(
-        deepEspresso = Color(0xFF1E1814),
-        darkMocha = Color(0xFF2A211C),
-        coffeeBrown = Color(0xFFB08968),
-        softLatte = Color(0xFFDDB892),
-        warmCream = Color(0xFFF8F4F0),
-        secondaryText = Color(0xFFCBB9A8),
+        deepEspresso = Color(0xFF040209),
+        darkMocha = Color(0xFF090615),
+        coffeeBrown = Color(0xFF6B4EE0),
+        softLatte = Color(0xFF9079EC),
+        warmCream = Color(0xFFCAC5D6),
+        secondaryText = Color(0xFF676176),
         isNight = true
     )
 }
@@ -46,19 +46,19 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = SecondaryText
 )
 
-private val LightColorScheme = lightColorScheme(
+private val LightColorScheme = darkColorScheme( // Also use darkColorScheme for twilight mode to protect the eyes completely
     primary = CoffeeBrown,
     secondary = SoftLatte,
-    tertiary = DeepEspresso,
-    background = WarmCream,
-    surface = WarmCream,
-    onPrimary = DeepEspresso,
-    onSecondary = DeepEspresso,
-    onTertiary = WarmCream,
-    onBackground = DeepEspresso,
-    onSurface = DeepEspresso,
-    surfaceVariant = SoftLatte,
-    onSurfaceVariant = DeepEspresso
+    tertiary = WarmCream,
+    background = Color(0xFF0F0B1E), // Soft midnight twilight background (very dim and gentle)
+    surface = Color(0xFF16112C),    // Cozy twilight surface/card background
+    onPrimary = WarmCream,
+    onSecondary = Color(0xFF0F0B1E),
+    onTertiary = Color(0xFF0F0B1E),
+    onBackground = WarmCream,
+    onSurface = WarmCream,
+    surfaceVariant = Color(0xFF16112C),
+    onSurfaceVariant = SecondaryText
 )
 
 @Composable
@@ -80,11 +80,11 @@ fun NocTuneTheme(
         )
     } else {
         AppColors(
-            deepEspresso = WarmCream,
-            darkMocha = WarmCream,
-            coffeeBrown = DeepEspresso,
+            deepEspresso = Color(0xFF0F0B1E), // Soft twilight dark purple
+            darkMocha = Color(0xFF16112C),    // Cozy twilight surface/card background
+            coffeeBrown = CoffeeBrown,
             softLatte = SoftLatte,
-            warmCream = DeepEspresso,
+            warmCream = WarmCream,
             secondaryText = SecondaryText,
             isNight = false
         )
