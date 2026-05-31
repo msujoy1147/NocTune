@@ -248,7 +248,6 @@ object MusicPlayerManager {
         }
         savePlaybackState()
         stopProgressTracker()
-        startForegroundService() // Updates service state
     }
 
     fun resumePlayback() {
@@ -464,7 +463,16 @@ object MusicPlayerManager {
     private fun startForegroundService() {
         val ctx = context ?: return
         val serviceIntent = Intent(ctx, NocTunePlayerService::class.java)
-        ContextCompat.startForegroundService(ctx, serviceIntent)
+        try {
+            ContextCompat.startForegroundService(ctx, serviceIntent)
+        } catch (e: Exception) {
+            Log.e("NocTunePlayer", "Failed to start foreground service, falling back to regular startService", e)
+            try {
+                ctx.startService(serviceIntent)
+            } catch (ex: Exception) {
+                Log.e("NocTunePlayer", "Failed to start service entirely", ex)
+            }
+        }
     }
 
     fun release() {

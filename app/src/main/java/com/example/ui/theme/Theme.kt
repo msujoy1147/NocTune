@@ -5,6 +5,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+
+data class AppColors(
+    val deepEspresso: Color,
+    val darkMocha: Color,
+    val coffeeBrown: Color,
+    val softLatte: Color,
+    val warmCream: Color,
+    val secondaryText: Color,
+    val isNight: Boolean
+)
+
+val LocalAppColors = staticCompositionLocalOf {
+    AppColors(
+        deepEspresso = Color(0xFF1E1814),
+        darkMocha = Color(0xFF2A211C),
+        coffeeBrown = Color(0xFFB08968),
+        softLatte = Color(0xFFDDB892),
+        warmCream = Color(0xFFF8F4F0),
+        secondaryText = Color(0xFFCBB9A8),
+        isNight = true
+    )
+}
 
 private val DarkColorScheme = darkColorScheme(
     primary = CoffeeBrown,
@@ -43,9 +68,33 @@ fun NocTuneTheme(
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val appColors = if (darkTheme) {
+        AppColors(
+            deepEspresso = DeepEspresso,
+            darkMocha = DarkMocha,
+            coffeeBrown = CoffeeBrown,
+            softLatte = SoftLatte,
+            warmCream = WarmCream,
+            secondaryText = SecondaryText,
+            isNight = true
+        )
+    } else {
+        AppColors(
+            deepEspresso = WarmCream,
+            darkMocha = WarmCream,
+            coffeeBrown = DeepEspresso,
+            softLatte = SoftLatte,
+            warmCream = DeepEspresso,
+            secondaryText = SecondaryText,
+            isNight = false
+        )
+    }
+
+    CompositionLocalProvider(LocalAppColors provides appColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

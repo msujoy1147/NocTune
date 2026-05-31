@@ -70,26 +70,51 @@ class ProceduralAudioSynthesizer {
     
     @Synchronized
     fun stop() {
+        if (!isPlaying) return
         isPlaying = false
         
-        try {
-            audioTrack?.apply {
-                if (playState == AudioTrack.PLAYSTATE_PLAYING) {
-                    stop()
-                }
-                release()
-            }
-        } catch (e: Exception) {
-            Log.e("NocTuneSynth", "Error releasing AudioTrack", e)
-        }
+        // 1. Grab thread reference and interrupt it
+        val threadToJoin = synthThread
+        val trackToRelease = audioTrack
+        
+        synthThread = null
         audioTrack = null
         
         try {
-            synthThread?.join(100)
+            threadToJoin?.interrupt()
         } catch (e: Exception) {
-            Log.e("NocTuneSynth", "Error joining synth thread", e)
+            Log.e("NocTuneSynth", "Error interrupting thread", e)
         }
-        synthThread = null
+        
+        // 2. Stop the audio track first. Any active blocking write() or playback will unblock immediately.
+        try {
+            trackToRelease?.apply {
+                if (playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    stop()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("NocTuneSynth", "Error stopping AudioTrack", e)
+        }
+
+        // 3. Offload blocking operations (joining thread and releasing track) to a background thread
+        // to keep the main UI thread 100% responsive and avoid InputDispatcher channel broken crashes.
+        Thread {
+            try {
+                threadToJoin?.join(300) // 300ms is more than enough for current iteration to exit
+            } catch (e: Exception) {
+                Log.e("NocTuneSynth", "Error joining thread in background", e)
+            }
+            try {
+                trackToRelease?.apply {
+                    flush()
+                    release()
+                }
+                Log.d("NocTuneSynth", "AudioTrack released successfully in background")
+            } catch (e: Exception) {
+                Log.e("NocTuneSynth", "Error releasing AudioTrack in background", e)
+            }
+        }.start()
     }
 
     private fun renderLoop(bufferSize: Int) {

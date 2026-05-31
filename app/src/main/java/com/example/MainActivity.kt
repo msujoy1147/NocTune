@@ -35,6 +35,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -74,15 +75,31 @@ class MainActivity : ComponentActivity() {
         )
         
         setContent {
-            NocTuneTheme {
-                MainAppScreen(viewModel)
+            val context = LocalContext.current
+            val prefs = remember { context.getSharedPreferences("app_prefs", MODE_PRIVATE) }
+            var isNightMode by remember { mutableStateOf(prefs.getBoolean("is_night_mode", true)) }
+
+            NocTuneTheme(darkTheme = isNightMode) {
+                MainAppScreen(
+                    viewModel = viewModel,
+                    isNightMode = isNightMode,
+                    onToggleNightMode = {
+                        val nextMode = !isNightMode
+                        isNightMode = nextMode
+                        prefs.edit().putBoolean("is_night_mode", nextMode).apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun MainAppScreen(viewModel: PlayerViewModel) {
+fun MainAppScreen(
+    viewModel: PlayerViewModel,
+    isNightMode: Boolean,
+    onToggleNightMode: () -> Unit
+) {
     val context = LocalContext.current
     
     // Core states
@@ -120,13 +137,29 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
     var showAddToPlaylistSelector by remember { mutableStateOf<SongEntity?>(null) }
     var showQueueDrawer by remember { mutableStateOf(false) }
 
-    // Coffee lounge visuals Constants
-    val deepEspresso = Color(0xFF1E1814)
-    val darkMocha = Color(0xFF2A211C)
-    val coffeeBrown = Color(0xFFB08968)
-    val softLatte = Color(0xFFDDB892)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    // App dynamic visuals Constants from Theme
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val deepEspresso = appColors.deepEspresso
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
+
+    // System Back Press Handler for smooth and robust navigation
+    androidx.activity.compose.BackHandler(
+        enabled = expandedPlayer || showQueueDrawer || showSleepTimerMenu || showAddToPlaylistSelector != null || showCreatePlaylistInput || selectedPlaylist != null || currentTab != "home"
+    ) {
+        when {
+            showQueueDrawer -> showQueueDrawer = false
+            showSleepTimerMenu -> showSleepTimerMenu = false
+            showAddToPlaylistSelector != null -> showAddToPlaylistSelector = null
+            showCreatePlaylistInput -> showCreatePlaylistInput = false
+            expandedPlayer -> expandedPlayer = false
+            selectedPlaylist != null -> viewModel.selectPlaylist(null)
+            currentTab != "home" -> currentTab = "home"
+        }
+    }
 
     // Check & request runtime permissions for music files
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -175,24 +208,24 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                 modifier = Modifier.fillMaxSize(),
                 containerColor = deepEspresso,
                 bottomBar = {
-                    // Standard Custom Tab BottomNavigation with safe navigation bars padding for all phones
-                    Column(
-                        modifier = Modifier
-                            .background(deepEspresso)
-                            .navigationBarsPadding()
-                    ) {
-                        // Inline floating mini player sits above bottom navigation bar
-                        val activeSong = currentSong
-                        if (activeSong != null) {
-                            MiniFloatingPlayer(
-                                song = activeSong,
-                                isPlaying = isPlaying,
-                                onPlayPauseToggle = { viewModel.resumeOrPause() },
-                                onClick = { expandedPlayer = true }
-                            )
-                        }
+                    if (!expandedPlayer) {
+                        Column(
+                            modifier = Modifier
+                                .background(deepEspresso)
+                                .navigationBarsPadding()
+                        ) {
+                            // Inline floating mini player sits above bottom navigation bar
+                            val activeSong = currentSong
+                            if (activeSong != null) {
+                                MiniFloatingPlayer(
+                                    song = activeSong,
+                                    isPlaying = isPlaying,
+                                    onPlayPauseToggle = { viewModel.resumeOrPause() },
+                                    onClick = { expandedPlayer = true }
+                                )
+                            }
 
-                        NavigationBar(
+                            NavigationBar(
                             containerColor = darkMocha.copy(alpha = 0.9f),
                             tonalElevation = 0.dp,
                             windowInsets = WindowInsets(0, 0, 0, 0),
@@ -248,6 +281,7 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                         }
                     }
                 }
+            }
             ) { innerPadding ->
                 Box(
                     modifier = Modifier
@@ -257,19 +291,23 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                     // Tab router
                     when (currentTab) {
                         "home" -> HomeScreen(
-                            recentlyPlayed = recentlyPlayed,
                             favoriteSongs = favoriteSongs,
-                            mostPlayed = mostPlayed,
                             lastAdded = lastAdded,
                             allSongsList = allSongs,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
                             onPlaySong = { s -> viewModel.playSong(s, allSongs) },
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            isNightMode = isNightMode,
+                            onToggleNightMode = onToggleNightMode,
                             modifier = Modifier.fillMaxSize()
                         )
                         
                         "library" -> LibraryScreen(
                             songs = allSongs,
                             playlists = playlists,
+                            isNightMode = isNightMode,
+                            onToggleNightMode = onToggleNightMode,
                             selectedPlaylist = selectedPlaylist,
                             songsInSelectedPlaylist = songsInSelectedPlaylist,
                             activeSection = activeLibrarySection,
@@ -280,15 +318,21 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                             onDeletePlaylist = { viewModel.deletePlaylist(it) },
                             onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
                             modifier = Modifier.fillMaxSize()
                         )
                         
                         "search" -> SearchScreen(
                             songs = filteredSongs,
                             query = searchQuery,
+                            isNightMode = isNightMode,
+                            onToggleNightMode = onToggleNightMode,
                             onQueryChange = { viewModel.updateSearchQuery(it) },
                             onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -453,19 +497,23 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                         ) {
                             when (currentTab) {
                                 "home" -> HomeScreen(
-                                    recentlyPlayed = recentlyPlayed,
                                     favoriteSongs = favoriteSongs,
-                                    mostPlayed = mostPlayed,
                                     lastAdded = lastAdded,
                                     allSongsList = allSongs,
+                                    currentSong = currentSong,
+                                    isPlaying = isPlaying,
                                     onPlaySong = { s -> viewModel.playSong(s, allSongs) },
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    isNightMode = isNightMode,
+                                    onToggleNightMode = onToggleNightMode,
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 
                                 "library" -> LibraryScreen(
                                     songs = allSongs,
                                     playlists = playlists,
+                                    isNightMode = isNightMode,
+                                    onToggleNightMode = onToggleNightMode,
                                     selectedPlaylist = selectedPlaylist,
                                     songsInSelectedPlaylist = songsInSelectedPlaylist,
                                     activeSection = activeLibrarySection,
@@ -476,15 +524,21 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
                                     onDeletePlaylist = { viewModel.deletePlaylist(it) },
                                     onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    currentSong = currentSong,
+                                    isPlaying = isPlaying,
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 
                                 "search" -> SearchScreen(
                                     songs = filteredSongs,
                                     query = searchQuery,
+                                    isNightMode = isNightMode,
+                                    onToggleNightMode = onToggleNightMode,
                                     onQueryChange = { viewModel.updateSearchQuery(it) },
                                     onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                    currentSong = currentSong,
+                                    isPlaying = isPlaying,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -605,19 +659,22 @@ fun MainAppScreen(viewModel: PlayerViewModel) {
 // ==========================================
 @Composable
 fun HomeScreen(
-    recentlyPlayed: List<SongEntity>,
     favoriteSongs: List<SongEntity>,
-    mostPlayed: List<SongEntity>,
     lastAdded: List<SongEntity>,
     allSongsList: List<SongEntity>,
+    currentSong: SongEntity?,
+    isPlaying: Boolean,
     onPlaySong: (SongEntity) -> Unit,
     onAddToPlaylistRequest: (SongEntity) -> Unit,
+    isNightMode: Boolean,
+    onToggleNightMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val coffeeBrown = Color(0xFFB08968)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     LazyColumn(
         modifier = modifier
@@ -628,91 +685,82 @@ fun HomeScreen(
     ) {
         // Welcome and App branding Title
         item {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                Text(
-                    text = "WELCOME BACK",
-                    color = secondaryText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier.testTag("app_title")
-                )
-                Text(
-                    text = "Your Sound Your Space.",
-                    color = warmCream,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.padding(bottom = 8.dp).weight(1f)) {
+                    Text(
+                        text = "WELCOME BACK",
+                        color = secondaryText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 2.sp,
+                        modifier = Modifier.testTag("app_title")
+                    )
+                    Text(
+                        text = "Your Sound Your Space.",
+                        color = warmCream,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onToggleNightMode,
+                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_btn")
+                ) {
+                    Icon(
+                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = "Toggle Night/Light Mode",
+                        tint = if (isNightMode) coffeeBrown else Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
 
-        // Section: Recently Played (Horizontal Flow Cards)
-        if (recentlyPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(title = "Recently Played")
+        // Section: Favorite Music (Favourite Music)
+        item {
+            HomeSectionHeader(title = "Favourite Music")
+            if (favoriteSongs.isEmpty()) {
+                EmptyStateCard(message = "Tap the heart on any song to create your custom espresso favorites.")
+            } else {
                 LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
-                    items(recentlyPlayed) { song ->
+                    items(favoriteSongs) { song ->
                         PlayableLoungeCard(
                             song = song,
                             onClick = { onPlaySong(song) },
-                            onLongClick = { onAddToPlaylistRequest(song) }
+                            onLongClick = { onAddToPlaylistRequest(song) },
+                            modifier = Modifier.width(140.dp)
                         )
                     }
                 }
             }
         }
 
-        // Section: Last Added (Horizontal Flow Cards)
-        if (lastAdded.isNotEmpty()) {
-            item {
-                HomeSectionHeader(title = "Last Added Songs")
+        // Section: Latest Music (Latest Music)
+        item {
+            HomeSectionHeader(title = "Latest Music")
+            if (lastAdded.isEmpty()) {
+                EmptyStateCard(message = "No recently added tracks. Your local music library files will appear here.")
+            } else {
                 LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     items(lastAdded) { song ->
                         PlayableLoungeCard(
                             song = song,
                             onClick = { onPlaySong(song) },
-                            onLongClick = { onAddToPlaylistRequest(song) }
-                        )
-                    }
-                }
-            }
-        }
-
-        // Section: Favorite Tracks (Vertical List Items)
-        item {
-            HomeSectionHeader(title = "Your Favorite Blends")
-            if (favoriteSongs.isEmpty()) {
-                EmptyStateCard(message = "Tap the heart on any song to create your custom espresso favorites.")
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    favoriteSongs.take(6).forEach { song ->
-                        SongListItem(
-                            song = song,
-                            onClick = { onPlaySong(song) },
-                            onLongClick = { onAddToPlaylistRequest(song) }
-                        )
-                    }
-                }
-            }
-        }
-
-        // Section: Most Played Tracks
-        if (mostPlayed.isNotEmpty()) {
-            item {
-                HomeSectionHeader(title = "Most Played")
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    mostPlayed.take(6).forEach { song ->
-                        SongListItem(
-                            song = song,
-                            onClick = { onPlaySong(song) },
-                            onLongClick = { onAddToPlaylistRequest(song) }
+                            onLongClick = { onAddToPlaylistRequest(song) },
+                            modifier = Modifier.width(140.dp)
                         )
                     }
                 }
@@ -739,9 +787,10 @@ fun HomeScreen(
 
 @Composable
 fun HomeSectionHeader(title: String) {
+    val appColors = com.example.ui.theme.LocalAppColors.current
     Text(
         text = title,
-        color = Color(0xFFF8F4F0), // Warm Cream
+        color = appColors.warmCream,
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 12.dp)
@@ -755,6 +804,8 @@ fun HomeSectionHeader(title: String) {
 fun LibraryScreen(
     songs: List<SongEntity>,
     playlists: List<PlaylistEntity>,
+    isNightMode: Boolean,
+    onToggleNightMode: () -> Unit,
     selectedPlaylist: PlaylistEntity?,
     songsInSelectedPlaylist: List<SongEntity>,
     activeSection: String,
@@ -765,14 +816,18 @@ fun LibraryScreen(
     onDeletePlaylist: (PlaylistEntity) -> Unit,
     onRemoveSongFromPlaylist: (Int, String) -> Unit,
     onAddToPlaylistRequest: (SongEntity) -> Unit,
+    currentSong: SongEntity? = null,
+    isPlaying: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val deepEspresso = Color(0xFF1E1814)
-    val coffeeBrown = Color(0xFFB08968)
-    val softLatte = Color(0xFFDDB892)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val deepEspresso = appColors.deepEspresso
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
+    val isNight = appColors.isNight
 
     Column(
         modifier = modifier
@@ -816,46 +871,107 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
                     items(songsInSelectedPlaylist) { song ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(darkMocha.copy(alpha = 0.6f))
-                                .clickable { onPlaySong(song, songsInSelectedPlaylist) }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                                CoffeeAlbumArt(
-                                    presetId = song.generativePreset,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(text = song.title, color = warmCream, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                    Text(text = song.artist, color = secondaryText, fontSize = 11.sp)
+                        val isActive = currentSong?.id == song.id
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPlaySong(song, songsInSelectedPlaylist) }
+                                    .background(if (isActive) (if (isNight) Color(0x1F9575CD) else Color(0x0F000000)) else Color.Transparent)
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                    // Elegant rounded-square music note container from 2nd picture style
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isNight) Color(0xFF5F35C2) else Color(0xFFEBEBEB)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = if (isNight) Color.White else Color.Black,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = song.title,
+                                            color = if (isActive && isNight) Color(0xFFDCC8FA) else warmCream,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (song.artist.isBlank() || song.artist.contains("<unknown>", ignoreCase = true)) "<unknown>" else song.artist,
+                                            color = secondaryText.copy(alpha = 0.82f),
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    if (isActive) {
+                                        EqualizerAnimation(
+                                            isPlaying = isPlaying,
+                                            color = if (isNight) Color(0xFFB39DDB) else Color.Black,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { onRemoveSongFromPlaylist(selectedPlaylist.id, song.id) },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.RemoveCircleOutline,
+                                        contentDescription = "Remove music track item",
+                                        tint = Color.Red.copy(alpha = 0.7f)
+                                    )
                                 }
                             }
-                            IconButton(
-                                onClick = { onRemoveSongFromPlaylist(selectedPlaylist.id, song.id) },
-                                modifier = Modifier.minimumInteractiveComponentSize()
-                            ) {
-                                Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Remove music track item", tint = Color.Red.copy(alpha = 0.7f))
-                            }
+                            HorizontalDivider(
+                                color = if (isNight) Color(0x1A9575CD) else Color(0x0E000000),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
             }
         } else {
             // Header
-            Text(
-                text = "Studio Library",
-                color = warmCream,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Studio Library",
+                    color = warmCream,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(
+                    onClick = onToggleNightMode,
+                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_library")
+                ) {
+                    Icon(
+                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = "Toggle Night/Light Mode",
+                        tint = if (isNightMode) coffeeBrown else Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
 
             // Section Filter Selectors
             Row(
@@ -900,10 +1016,13 @@ fun LibraryScreen(
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
                         items(songs) { song ->
+                            val isActive = currentSong?.id == song.id
                             SongListItem(
                                 song = song,
                                 onClick = { onPlaySong(song, songs) },
-                                onLongClick = { onAddToPlaylistRequest(song) }
+                                onLongClick = { onAddToPlaylistRequest(song) },
+                                isPlaying = isPlaying,
+                                isActive = isActive
                             )
                         }
                     }
@@ -938,7 +1057,8 @@ fun LibraryScreen(
                                     presetId = repSong?.generativePreset ?: "",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .aspectRatio(1f)
+                                        .aspectRatio(1f),
+                                    songPath = repSong?.path
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
@@ -990,7 +1110,8 @@ fun LibraryScreen(
                                     presetId = repSong?.generativePreset ?: "",
                                     modifier = Modifier
                                         .size(96.dp)
-                                        .clip(CircleShape)
+                                        .clip(CircleShape),
+                                    songPath = repSong?.path
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
@@ -1088,15 +1209,20 @@ fun LibraryScreen(
 fun SearchScreen(
     songs: List<SongEntity>,
     query: String,
+    isNightMode: Boolean,
+    onToggleNightMode: () -> Unit,
     onQueryChange: (String) -> Unit,
     onPlaySong: (SongEntity) -> Unit,
     onAddToPlaylistRequest: (SongEntity) -> Unit,
+    currentSong: SongEntity? = null,
+    isPlaying: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val coffeeBrown = Color(0xFFB08968)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     Column(
         modifier = modifier
@@ -1104,13 +1230,31 @@ fun SearchScreen(
             .padding(horizontal = 20.dp)
     ) {
         // App search title header
-        Text(
-            text = "Instant Coffee Search",
-            color = warmCream,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 24.dp, bottom = 16.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Search Your Songs",
+                color = warmCream,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(
+                onClick = onToggleNightMode,
+                modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
+            ) {
+                Icon(
+                    imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                    contentDescription = "Toggle Night/Light Mode",
+                    tint = if (isNightMode) coffeeBrown else Color.Black,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
 
         // Custom search text field
         OutlinedTextField(
@@ -1153,10 +1297,13 @@ fun SearchScreen(
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 items(songs) { song ->
+                    val isActive = currentSong?.id == song.id
                     SongListItem(
-                        song = song,
-                        onClick = { onPlaySong(song) },
-                        onLongClick = { onAddToPlaylistRequest(song) }
+                         song = song,
+                         onClick = { onPlaySong(song) },
+                         onLongClick = { onAddToPlaylistRequest(song) },
+                         isPlaying = isPlaying,
+                         isActive = isActive
                     )
                 }
             }
@@ -1172,19 +1319,20 @@ fun SearchScreen(
 fun PlayableLoungeCard(
     song: SongEntity,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     Column(
-        modifier = Modifier
-            .width(140.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(darkMocha, Color(0xFF211A16))
+                    colors = listOf(darkMocha, darkMocha.copy(alpha = 0.8f))
                 )
             )
             .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(20.dp))
@@ -1198,9 +1346,9 @@ fun PlayableLoungeCard(
         CoffeeAlbumArt(
             presetId = song.generativePreset,
             modifier = Modifier
-                .size(116.dp)
                 .fillMaxWidth()
-            // Spinning only on full player screen to conserve hardware performance
+                .aspectRatio(1f),
+            songPath = song.path
         )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
@@ -1211,9 +1359,10 @@ fun PlayableLoungeCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = song.artist,
-            color = secondaryText,
+            text = if (song.artist.isBlank() || song.artist.contains("<unknown>", ignoreCase = true)) "<unknown>" else song.artist,
+            color = secondaryText.copy(alpha = 0.85f),
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1226,61 +1375,88 @@ fun PlayableLoungeCard(
 fun SongListItem(
     song: SongEntity,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    isPlaying: Boolean = false,
+    isActive: Boolean = false
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
+    val isNight = appColors.isNight
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(darkMocha.copy(alpha = 0.4f))
-            .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(20.dp))
-            .coffeeFocusHighlight(RoundedCornerShape(20.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        CoffeeAlbumArt(
-            presetId = song.generativePreset,
-            modifier = Modifier.size(50.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                color = warmCream,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = song.artist,
-                color = secondaryText,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
+                .background(if (isActive) (if (isNight) Color(0x1F9575CD) else Color(0x0F000000)) else Color.Transparent)
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Elegant rounded-square music note container from 2nd picture style
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isNight) Color(0xFF5F35C2) else Color(0xFFEBEBEB)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = if (isNight) Color.White else Color.Black,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    color = if (isActive && isNight) Color(0xFFDCC8FA) else warmCream,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (song.artist.isBlank() || song.artist.contains("<unknown>", ignoreCase = true)) "<unknown>" else song.artist,
+                    color = secondaryText.copy(alpha = 0.82f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isActive) {
+                EqualizerAnimation(
+                    isPlaying = isPlaying,
+                    color = if (isNight) Color(0xFFB39DDB) else Color.Black,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+            }
+            Icon(
+                imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                contentDescription = null,
+                tint = if (song.isFavorite) Color.Red else secondaryText.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp)
             )
         }
-        Icon(
-            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-            contentDescription = "Song favorite vector flag icon",
-            tint = if (song.isFavorite) Color.Red else secondaryText.copy(alpha = 0.6f),
-            modifier = Modifier.size(18.dp)
+        HorizontalDivider(
+            color = if (isNight) Color(0x1A9575CD) else Color(0x0E000000),
+            thickness = 0.5.dp,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 @Composable
 fun EmptyStateCard(message: String) {
-    val darkMocha = Color(0xFF2A211C)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val secondaryText = appColors.secondaryText
 
     Box(
         modifier = Modifier
@@ -1310,10 +1486,11 @@ fun MiniFloatingPlayer(
     onPlayPauseToggle: () -> Unit,
     onClick: () -> Unit
 ) {
-    val darkMocha = Color(0xFF2A211C)
-    val coffeeBrown = Color(0xFFB08968)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val warmCream = appColors.warmCream
+    val secondaryText = appColors.secondaryText
 
     Row(
         modifier = Modifier
@@ -1331,7 +1508,8 @@ fun MiniFloatingPlayer(
         CoffeeAlbumArt(
             presetId = song.generativePreset,
             modifier = Modifier.size(42.dp),
-            isPlaying = isPlaying
+            isPlaying = isPlaying,
+            songPath = song.path
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -1390,12 +1568,14 @@ fun FullPlayerScreen(
     onTriggerSleepTimerMenu: () -> Unit,
     onTriggerQueueDrawer: () -> Unit
 ) {
-    val deepEspresso = Color(0xFF1E1814)
-    val darkMocha = Color(0xFF2A211C)
-    val coffeeBrown = Color(0xFFB08968)
-    val softLatte = Color(0xFFDDB892)
-    val warmCream = Color(0xFFF8F4F0)
-    val secondaryText = Color(0xFFCBB9A8)
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val isNight = appColors.isNight
+    val deepEspresso = if (isNight) Color(0xFF130D22) else appColors.deepEspresso
+    val darkMocha = if (isNight) Color(0xFF1E1530) else appColors.darkMocha
+    val coffeeBrown = if (isNight) Color(0xFF5F35C2) else appColors.coffeeBrown
+    val softLatte = if (isNight) Color(0xFFB39DDB) else appColors.softLatte
+    val warmCream = if (isNight) Color(0xFFDCC8FA) else appColors.warmCream
+    val secondaryText = if (isNight) Color(0xFFB39DDB).copy(alpha = 0.7f) else appColors.secondaryText
 
     // Formatted timelines
     val currentFormatted = remember(progress) {
@@ -1464,7 +1644,8 @@ fun FullPlayerScreen(
                         CoffeeAlbumArt(
                             presetId = song.generativePreset,
                             modifier = Modifier.fillMaxSize(),
-                            isPlaying = isPlaying
+                            isPlaying = isPlaying,
+                            songPath = song.path
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1680,7 +1861,8 @@ fun FullPlayerScreen(
                     CoffeeAlbumArt(
                         presetId = song.generativePreset,
                         modifier = Modifier.fillMaxSize(),
-                        isPlaying = isPlaying
+                        isPlaying = isPlaying,
+                        songPath = song.path
                     )
                 }
 
@@ -1894,7 +2076,8 @@ fun ActiveQueueDrawer(
                             ) {
                                 CoffeeAlbumArt(
                                     presetId = song.generativePreset,
-                                    modifier = Modifier.size(40.dp)
+                                    modifier = Modifier.size(40.dp),
+                                    songPath = song.path
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
@@ -1902,7 +2085,7 @@ fun ActiveQueueDrawer(
                                         text = song.title,
                                         color = if (isActive) coffeeBrown else warmCream,
                                         fontSize = 13.sp,
-                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold
+                                        fontWeight = FontWeight.Bold
                                     )
                                     Text(text = song.artist, color = secondaryText, fontSize = 11.sp)
                                 }
@@ -1915,19 +2098,83 @@ fun ActiveQueueDrawer(
     }
 }
 
-@Composable
 fun Modifier.coffeeFocusHighlight(
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
     borderColor: Color = Color(0xFFDDB892),
     borderWidth: androidx.compose.ui.unit.Dp = 2.dp
-): Modifier {
+): Modifier = composed {
     var isFocused by remember { mutableStateOf(false) }
-    return this
-        .onFocusChanged { isFocused = it.isFocused }
+    onFocusChanged { isFocused = it.isFocused }
         .border(
             width = if (isFocused) borderWidth else 0.dp,
             color = if (isFocused) borderColor else Color.Transparent,
             shape = shape
         )
+}
+
+@Composable
+fun EqualizerAnimation(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    color: Color = Color(0xFFB08968)
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "Equalizer")
+    
+    val b1HeightAnim by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(450, easing = FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "Bar1"
+    )
+    
+    val b2HeightAnim by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(350, easing = LinearOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "Bar2"
+    )
+    
+    val b3HeightAnim by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(550, easing = FastOutLinearInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "Bar3"
+    )
+
+    val b1Height = if (isPlaying) b1HeightAnim else 0.3f
+    val b2Height = if (isPlaying) b2HeightAnim else 0.5f
+    val b3Height = if (isPlaying) b3HeightAnim else 0.2f
+
+    Row(
+        modifier = modifier.size(20.dp, 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        val barWidth = 3.dp
+        Box(
+            modifier = Modifier
+                .size(barWidth, 14.dp * b1Height)
+                .background(color, RoundedCornerShape(1.dp))
+        )
+        Box(
+            modifier = Modifier
+                .size(barWidth, 14.dp * b2Height)
+                .background(color, RoundedCornerShape(1.dp))
+        )
+        Box(
+            modifier = Modifier
+                .size(barWidth, 14.dp * b3Height)
+                .background(color, RoundedCornerShape(1.dp))
+        )
+    }
 }
 
