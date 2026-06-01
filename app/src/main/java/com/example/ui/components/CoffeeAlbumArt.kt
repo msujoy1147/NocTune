@@ -81,20 +81,24 @@ fun CoffeeAlbumArt(
     songPath: String? = null
 ) {
     val artwork = rememberSongArtwork(songPath)
-    if (isPlaying) {
-        val infiniteTransition = rememberInfiniteTransition(label = "VinylRotation")
-        val rotationAngle by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(12000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "Angle"
-        )
-        CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = rotationAngle, artwork = artwork)
-    } else {
+    if (artwork != null) {
         CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = 0f, artwork = artwork)
+    } else {
+        if (isPlaying) {
+            val infiniteTransition = rememberInfiniteTransition(label = "VinylRotation")
+            val rotationAngle by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(12000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "Angle"
+            )
+            CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = rotationAngle, artwork = null)
+        } else {
+            CoffeeAlbumArtContent(presetId = presetId, modifier = modifier, angle = 0f, artwork = null)
+        }
     }
 }
 
@@ -124,52 +128,15 @@ fun CoffeeAlbumArtContent(
             val center = Offset(width / 2f, height / 2f)
             val radius = Math.min(width, height) / 2f
 
-            // Rotate entire canvas to reflect playback spin
-            rotate(angle, center) {
-                if (artwork != null) {
-                    val circlePath = Path().apply {
-                        addOval(androidx.compose.ui.geometry.Rect(center, radius))
-                    }
-                    clipPath(circlePath) {
-                        drawImage(
-                            image = artwork,
-                            dstOffset = IntOffset(
-                                (center.x - radius).toInt(),
-                                (center.y - radius).toInt()
-                            ),
-                            dstSize = IntSize((radius * 2).toInt(), (radius * 2).toInt())
-                        )
-                    }
-
-                    // Superimpose vinyl grooves
-                    drawCircle(
-                        color = Color(0x3C000000),
-                        radius = radius * 0.95f,
-                        style = Stroke(width = 8f)
-                    )
-                    drawCircle(
-                        color = Color(0x28000000),
-                        radius = radius * 0.88f,
-                        style = Stroke(width = 4f)
-                    )
-                    drawCircle(
-                        color = Color(0x1F000000),
-                        radius = radius * 0.8f,
-                        style = Stroke(width = 2f)
-                    )
-
-                    // Physical record center
-                    drawCircle(
-                        color = deepEspresso,
-                        radius = radius * 0.12f,
-                        center = center
-                    )
-                    drawCircle(
-                        color = warmCream,
-                        radius = radius * 0.04f,
-                        center = center
-                    )
-                } else {
+            if (artwork != null) {
+                drawImage(
+                    image = artwork,
+                    dstOffset = IntOffset(0, 0),
+                    dstSize = IntSize(width.toInt(), height.toInt())
+                )
+            } else {
+                // Rotate entire canvas to reflect playback spin
+                rotate(angle, center) {
                     // 1. Draw outer stylized vinyl grooves
                     drawCircle(
                         color = Color(0x28000000),

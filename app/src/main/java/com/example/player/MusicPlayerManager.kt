@@ -475,6 +475,32 @@ object MusicPlayerManager {
         }
     }
 
+    fun stopPlayback() {
+        _isPlaying.value = false
+        stopAllPlayers()
+        _currentSong.value = null
+        _currentPosition.value = 0L
+        stopProgressTracker()
+    }
+
+    fun removeSongFromQueue(song: SongEntity) {
+        val currentQueue = _playbackQueue.value.toMutableList()
+        val index = currentQueue.indexOfFirst { it.id == song.id }
+        if (index != -1) {
+            currentQueue.removeAt(index)
+            _playbackQueue.value = currentQueue
+            if (currentIndex == index) {
+                if (currentQueue.isEmpty()) {
+                    stopPlayback()
+                } else {
+                    nextSong()
+                }
+            } else if (currentIndex > index) {
+                currentIndex--
+            }
+        }
+    }
+
     fun release() {
         stopAllPlayers()
         stopProgressTracker()

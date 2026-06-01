@@ -33,6 +33,7 @@ class NocTunePlayerService : Service() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var isServiceInForeground = false
 
     override fun onCreate() {
         super.onCreate()
@@ -50,7 +51,9 @@ class NocTunePlayerService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, buildNotification())
             }
+            isServiceInForeground = true
         } catch (e: Exception) {
+            isServiceInForeground = false
             android.util.Log.e("NocTunePlayerService", "Failed to startForeground in onCreate", e)
         }
         
@@ -72,24 +75,31 @@ class NocTunePlayerService : Service() {
             ACTION_PREVIOUS -> MusicPlayerManager.prevSong()
             ACTION_STOP -> {
                 MusicPlayerManager.pausePlayback()
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                if (isServiceInForeground) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    isServiceInForeground = false
+                }
                 stopSelf()
+                return START_NOT_STICKY
             }
         }
         
         // Ensure starting foreground again safely if restarted
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    buildNotification(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, buildNotification())
+        if (intent?.action != ACTION_STOP) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        buildNotification(),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification())
+                }
+                isServiceInForeground = true
+            } catch (e: Exception) {
+                android.util.Log.e("NocTunePlayerService", "Failed to startForeground in onStartCommand", e)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("NocTunePlayerService", "Failed to startForeground in onStartCommand", e)
         }
         return START_NOT_STICKY
     }
@@ -187,19 +197,23 @@ class NocTunePlayerService : Service() {
                 } else {
                     startForeground(NOTIFICATION_ID, buildNotification())
                 }
+                isServiceInForeground = true
             } catch (e: Exception) {
                 android.util.Log.e("NocTunePlayerService", "Failed to startForeground in updateNotification", e)
             }
         } else {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_DETACH)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(false)
+            if (isServiceInForeground) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_DETACH)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(false)
+                    }
+                    isServiceInForeground = false
+                } catch (e: Exception) {
+                    android.util.Log.e("NocTunePlayerService", "Failed to stopForeground in updateNotification", e)
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("NocTunePlayerService", "Failed to stopForeground in updateNotification", e)
             }
             manager.notify(NOTIFICATION_ID, buildNotification())
         }

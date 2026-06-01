@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: MusicRepository
@@ -95,9 +96,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         // Observe custom playlist songs whenever target selection changes
         _selectedPlaylist
-            .filterNotNull()
             .flatMapLatest { playlist ->
-                repository.getSongsForPlaylist(playlist.id)
+                if (playlist != null) {
+                    repository.getSongsForPlaylist(playlist.id)
+                } else {
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                }
             }
             .onEach { songs ->
                 _songsInSelectedPlaylist.value = songs
@@ -177,6 +181,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (_selectedPlaylist.value?.id == playlist.id) {
                 _selectedPlaylist.value = null
             }
+        }
+    }
+
+    fun deleteSong(song: SongEntity) {
+        viewModelScope.launch {
+            if (currentSong.value?.id == song.id) {
+                MusicPlayerManager.stopPlayback()
+            }
+            MusicPlayerManager.removeSongFromQueue(song)
+            repository.deleteSong(song)
         }
     }
 

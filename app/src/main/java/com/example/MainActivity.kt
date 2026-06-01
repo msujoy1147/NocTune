@@ -33,11 +33,17 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -317,6 +323,7 @@ fun MainAppScreen(
                             onCreatePlaylistRequest = { showCreatePlaylistInput = true },
                             onDeletePlaylist = { viewModel.deletePlaylist(it) },
                             onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                            onDeleteSong = { viewModel.deleteSong(it) },
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                             currentSong = currentSong,
                             isPlaying = isPlaying,
@@ -330,6 +337,7 @@ fun MainAppScreen(
                             onToggleNightMode = onToggleNightMode,
                             onQueryChange = { viewModel.updateSearchQuery(it) },
                             onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                            onDeleteSong = { viewModel.deleteSong(it) },
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                             currentSong = currentSong,
                             isPlaying = isPlaying,
@@ -523,6 +531,7 @@ fun MainAppScreen(
                                     onCreatePlaylistRequest = { showCreatePlaylistInput = true },
                                     onDeletePlaylist = { viewModel.deletePlaylist(it) },
                                     onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                                    onDeleteSong = { viewModel.deleteSong(it) },
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                                     currentSong = currentSong,
                                     isPlaying = isPlaying,
@@ -536,6 +545,7 @@ fun MainAppScreen(
                                     onToggleNightMode = onToggleNightMode,
                                     onQueryChange = { viewModel.updateSearchQuery(it) },
                                     onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                                    onDeleteSong = { viewModel.deleteSong(it) },
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                                     currentSong = currentSong,
                                     isPlaying = isPlaying,
@@ -681,32 +691,23 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
-        contentPadding = PaddingValues(top = 24.dp, bottom = 48.dp)
+        contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp)
     ) {
         // Welcome and App branding Title
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(bottom = 8.dp).weight(1f)) {
-                    Text(
-                        text = "WELCOME BACK",
-                        color = secondaryText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 2.sp,
-                        modifier = Modifier.testTag("app_title")
-                    )
-                    Text(
-                        text = "Your Sound Your Space.",
-                        color = warmCream,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+                Text(
+                    text = "Lost in Classics",
+                    color = warmCream,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 IconButton(
                     onClick = onToggleNightMode,
                     modifier = Modifier.size(48.dp).testTag("night_mode_toggle_btn")
@@ -815,6 +816,7 @@ fun LibraryScreen(
     onCreatePlaylistRequest: () -> Unit,
     onDeletePlaylist: (PlaylistEntity) -> Unit,
     onRemoveSongFromPlaylist: (Int, String) -> Unit,
+    onDeleteSong: (SongEntity) -> Unit,
     onAddToPlaylistRequest: (SongEntity) -> Unit,
     currentSong: SongEntity? = null,
     isPlaying: Boolean = false,
@@ -828,6 +830,10 @@ fun LibraryScreen(
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
     val isNight = appColors.isNight
+
+    var selectedSongForDelete by remember { mutableStateOf<SongEntity?>(null) }
+    var selectedAlbum by remember { mutableStateOf<String?>(null) }
+    var selectedArtist by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = modifier
@@ -945,6 +951,134 @@ fun LibraryScreen(
                     }
                 }
             }
+        } else if (selectedAlbum != null) {
+            val albumTitle = selectedAlbum!!
+            val albumSongs = songs.filter { it.album == albumTitle }
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { selectedAlbum = null; selectedSongForDelete = null },
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = warmCream)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = albumTitle, color = warmCream, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = "${albumSongs.size} tracks from this album", color = secondaryText, fontSize = 12.sp)
+                }
+                if (selectedSongForDelete != null) {
+                    Button(
+                        onClick = {
+                            selectedSongForDelete?.let { onDeleteSong(it) }
+                            selectedSongForDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (albumSongs.isEmpty()) {
+                EmptyStateCard(message = "This album contains no tracks.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
+                    items(albumSongs) { song ->
+                        val isActive = currentSong?.id == song.id
+                        val isSelected = selectedSongForDelete?.id == song.id
+                        SongListItem(
+                            song = song,
+                            onClick = { 
+                                selectedSongForDelete = null
+                                onPlaySong(song, albumSongs) 
+                            },
+                            onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                            isPlaying = isPlaying,
+                            isActive = isActive,
+                            isHighlighted = isSelected
+                        )
+                    }
+                }
+            }
+        } else if (selectedArtist != null) {
+            val artistName = selectedArtist!!
+            val artistSongs = songs.filter { it.artist == artistName }
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { selectedArtist = null; selectedSongForDelete = null },
+                    modifier = Modifier.minimumInteractiveComponentSize()
+                ) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = warmCream)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = artistName, color = warmCream, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = "${artistSongs.size} tracks by this artist", color = secondaryText, fontSize = 12.sp)
+                }
+                if (selectedSongForDelete != null) {
+                    Button(
+                        onClick = {
+                            selectedSongForDelete?.let { onDeleteSong(it) }
+                            selectedSongForDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (artistSongs.isEmpty()) {
+                EmptyStateCard(message = "This artist has no tracks.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp)
+                ) {
+                    items(artistSongs) { song ->
+                        val isActive = currentSong?.id == song.id
+                        val isSelected = selectedSongForDelete?.id == song.id
+                        SongListItem(
+                            song = song,
+                            onClick = { 
+                                selectedSongForDelete = null
+                                onPlaySong(song, artistSongs) 
+                            },
+                            onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                            isPlaying = isPlaying,
+                            isActive = isActive,
+                            isHighlighted = isSelected
+                        )
+                    }
+                }
+            }
         } else {
             // Header
             Row(
@@ -960,16 +1094,41 @@ fun LibraryScreen(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(
-                    onClick = onToggleNightMode,
-                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_library")
-                ) {
-                    Icon(
-                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        contentDescription = "Toggle Night/Light Mode",
-                        tint = if (isNightMode) coffeeBrown else Color.Black,
-                        modifier = Modifier.size(28.dp)
-                    )
+                if (selectedSongForDelete != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(onClick = { selectedSongForDelete = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = secondaryText)
+                        }
+                        Button(
+                            onClick = {
+                                selectedSongForDelete?.let { onDeleteSong(it) }
+                                selectedSongForDelete = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    IconButton(
+                        onClick = onToggleNightMode,
+                        modifier = Modifier.size(48.dp).testTag("night_mode_toggle_library")
+                    ) {
+                        Icon(
+                            imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = "Toggle Night/Light Mode",
+                            tint = if (isNightMode) coffeeBrown else Color.Black,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 
@@ -993,7 +1152,10 @@ fun LibraryScreen(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) coffeeBrown else darkMocha)
-                            .clickable { onSectionChange(secId) }
+                            .clickable {
+                                selectedSongForDelete = null
+                                onSectionChange(secId) 
+                            }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1017,12 +1179,17 @@ fun LibraryScreen(
                     ) {
                         items(songs) { song ->
                             val isActive = currentSong?.id == song.id
+                            val isSelected = selectedSongForDelete?.id == song.id
                             SongListItem(
                                 song = song,
-                                onClick = { onPlaySong(song, songs) },
-                                onLongClick = { onAddToPlaylistRequest(song) },
+                                onClick = { 
+                                    selectedSongForDelete = null
+                                    onPlaySong(song, songs) 
+                                },
+                                onLongClick = { selectedSongForDelete = if (isSelected) null else song },
                                 isPlaying = isPlaying,
-                                isActive = isActive
+                                isActive = isActive,
+                                isHighlighted = isSelected
                             )
                         }
                     }
@@ -1047,9 +1214,7 @@ fun LibraryScreen(
                                     .background(darkMocha)
                                     .coffeeFocusHighlight(RoundedCornerShape(20.dp))
                                     .clickable {
-                                        if (albumSongs.isNotEmpty()) {
-                                            onPlaySong(albumSongs.first(), albumSongs)
-                                        }
+                                        selectedAlbum = albumTitle
                                     }
                                     .padding(12.dp)
                             ) {
@@ -1098,9 +1263,7 @@ fun LibraryScreen(
                                     .background(darkMocha)
                                     .coffeeFocusHighlight(RoundedCornerShape(20.dp))
                                     .clickable {
-                                        if (artSongs.isNotEmpty()) {
-                                            onPlaySong(artSongs.first(), artSongs)
-                                        }
+                                        selectedArtist = artistName
                                     }
                                     .padding(12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -1213,6 +1376,7 @@ fun SearchScreen(
     onToggleNightMode: () -> Unit,
     onQueryChange: (String) -> Unit,
     onPlaySong: (SongEntity) -> Unit,
+    onDeleteSong: (SongEntity) -> Unit,
     onAddToPlaylistRequest: (SongEntity) -> Unit,
     currentSong: SongEntity? = null,
     isPlaying: Boolean = false,
@@ -1223,6 +1387,8 @@ fun SearchScreen(
     val coffeeBrown = appColors.coffeeBrown
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
+
+    var selectedSongForDelete by remember { mutableStateOf<SongEntity?>(null) }
 
     Column(
         modifier = modifier
@@ -1243,23 +1409,51 @@ fun SearchScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
-            IconButton(
-                onClick = onToggleNightMode,
-                modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
-            ) {
-                Icon(
-                    imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                    contentDescription = "Toggle Night/Light Mode",
-                    tint = if (isNightMode) coffeeBrown else Color.Black,
-                    modifier = Modifier.size(28.dp)
-                )
+            if (selectedSongForDelete != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = { selectedSongForDelete = null }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancel selection", tint = secondaryText)
+                    }
+                    Button(
+                        onClick = {
+                            selectedSongForDelete?.let { onDeleteSong(it) }
+                            selectedSongForDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                IconButton(
+                    onClick = onToggleNightMode,
+                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
+                ) {
+                    Icon(
+                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = "Toggle Night/Light Mode",
+                        tint = if (isNightMode) coffeeBrown else Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
 
         // Custom search text field
         OutlinedTextField(
             value = query,
-            onValueChange = onQueryChange,
+            onValueChange = {
+                selectedSongForDelete = null
+                onQueryChange(it)
+            },
             placeholder = { Text("Search songs, albums, and artists in NocTune...", color = secondaryText) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Active search trigger magnifier", tint = secondaryText) },
             colors = OutlinedTextFieldDefaults.colors(
@@ -1298,12 +1492,17 @@ fun SearchScreen(
             ) {
                 items(songs) { song ->
                     val isActive = currentSong?.id == song.id
+                    val isSelected = selectedSongForDelete?.id == song.id
                     SongListItem(
                          song = song,
-                         onClick = { onPlaySong(song) },
-                         onLongClick = { onAddToPlaylistRequest(song) },
+                         onClick = { 
+                             selectedSongForDelete = null
+                             onPlaySong(song) 
+                         },
+                         onLongClick = { selectedSongForDelete = if (isSelected) null else song },
                          isPlaying = isPlaying,
-                         isActive = isActive
+                         isActive = isActive,
+                         isHighlighted = isSelected
                     )
                 }
             }
@@ -1377,7 +1576,8 @@ fun SongListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     isPlaying: Boolean = false,
-    isActive: Boolean = false
+    isActive: Boolean = false,
+    isHighlighted: Boolean = false
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val warmCream = appColors.warmCream
@@ -1394,7 +1594,11 @@ fun SongListItem(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .background(if (isActive) coffeeBrown.copy(alpha = 0.15f) else Color.Transparent)
+                .background(
+                    if (isHighlighted) Color.Red.copy(alpha = 0.15f)
+                    else if (isActive) coffeeBrown.copy(alpha = 0.15f)
+                    else Color.Transparent
+                )
                 .padding(vertical = 12.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1494,16 +1698,78 @@ fun MiniFloatingPlayer(
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
 
+    val shape = RoundedCornerShape(24.dp)
+    
+    // Smooth fade-in onset transition when music starts playing
+    val strokeRevealAlpha by animateFloatAsState(
+        targetValue = if (isPlaying) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "strokeReveal"
+    )
+
+    // Breathing pulse cycle representing playing/resonance flow
+    val infiniteTransition = rememberInfiniteTransition(label = "glowPulse")
+    val glowIntensity by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "glowIntensity"
+    )
+
+    val modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 24.dp, vertical = 8.dp)
+        .clip(shape)
+        .background(darkMocha.copy(alpha = 0.95f))
+        .drawBehind {
+            val outline = shape.createOutline(size, layoutDirection, this)
+
+            // 1. Draw static muted border when relaxed/paused
+            val baseBorderAlpha = (1f - strokeRevealAlpha) * 0.14f
+            if (baseBorderAlpha > 0f) {
+                drawOutline(
+                    outline = outline,
+                    color = Color(0xFFB08968).copy(alpha = baseBorderAlpha),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                )
+            }
+
+            // 2. Draw highly-polished thin glowing borders when active
+            if (strokeRevealAlpha > 0f) {
+                val glowColor = appColors.softLatte
+                val alpha = strokeRevealAlpha * glowIntensity
+
+                // Layer 1: Ambient outer halo (broad blur simulation)
+                drawOutline(
+                    outline = outline,
+                    color = glowColor.copy(alpha = alpha * 0.15f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4.dp.toPx())
+                )
+
+                // Layer 2: Medium glow accentuation
+                drawOutline(
+                    outline = outline,
+                    color = glowColor.copy(alpha = alpha * 0.4f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                )
+
+                // Layer 3: Main sharp glowing core (extremely thin: 0.8dp)
+                drawOutline(
+                    outline = outline,
+                    color = glowColor.copy(alpha = strokeRevealAlpha * 0.95f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.8.dp.toPx())
+                )
+            }
+        }
+        .clickable { onClick() }
+        .padding(horizontal = 16.dp, vertical = 10.dp)
+        .testTag("mini_player")
+
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(darkMocha.copy(alpha = 0.95f))
-            .border(1.dp, Color(0x24B08968), RoundedCornerShape(24.dp)) // Matching subtle border
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .testTag("mini_player"),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Rotating album mini visual
@@ -1592,6 +1858,12 @@ fun FullPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(deepEspresso)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                // Swallow all clicks/taps on the backdrop area to prevent fall-through
+            }
     ) {
         val isWide = maxWidth >= 600.dp
 
@@ -1752,11 +2024,21 @@ fun FullPlayerScreen(
 
                     // Primary control decks
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onToggleFavorite, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                        // Favorite Button
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .clickable { onToggleFavorite() }
+                                .coffeeFocusHighlight(CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Toggle favorite state on song",
@@ -1764,40 +2046,92 @@ fun FullPlayerScreen(
                                 modifier = Modifier.size(24.dp)
                             )
                         }
-                        IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Skip previous track button", tint = warmCream, modifier = Modifier.size(36.dp))
+
+                        // Media Controls clustered together in the center with zero-padding clicks
+                        @OptIn(ExperimentalMaterial3Api::class)
+                        CompositionLocalProvider(
+                            LocalMinimumInteractiveComponentSize provides 0.dp
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Previous Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .clickable { onPrevious() }
+                                        .coffeeFocusHighlight(CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipPrevious,
+                                        contentDescription = "Skip previous track button",
+                                        tint = warmCream,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+
+                                // Play / Pause Circle Tactile button
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(coffeeBrown)
+                                        .clickable { onPlayPause() }
+                                        .coffeeFocusHighlight(CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = "Play icon",
+                                        tint = deepEspresso,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+
+                                // Next Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .clickable { onNext() }
+                                        .coffeeFocusHighlight(CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipNext,
+                                        contentDescription = "Skip next track button",
+                                        tint = warmCream,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+                            }
                         }
+
+                        // Playback order modes toggles (Shuffle / Repeat)
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
-                                .background(coffeeBrown)
-                                .coffeeFocusHighlight(CircleShape)
-                                .clickable { onPlayPause() },
+                                .clickable {
+                                    val trigger = (0..1).random()
+                                    if (trigger == 0) onToggleShuffle() else onToggleRepeat()
+                                }
+                                .coffeeFocusHighlight(CircleShape),
                             contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play icon",
-                                tint = deepEspresso,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                        IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Skip next track button", tint = warmCream, modifier = Modifier.size(36.dp))
-                        }
-                        IconButton(
-                            onClick = {
-                                val trigger = (0..1).random()
-                                if (trigger == 0) onToggleShuffle() else onToggleRepeat()
-                            },
-                            modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)
                         ) {
                             val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
                                 if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
                             }
                             val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
-                            Icon(imageVector = icon, contentDescription = "Play order type toggle indicator", tint = tint, modifier = Modifier.size(22.dp))
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = "Play order type toggle indicator",
+                                tint = tint,
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     }
                 }
@@ -1942,12 +2276,19 @@ fun FullPlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 32.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
+                        .padding(bottom = 32.dp, start = 24.dp, end = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Favorite Button
-                    IconButton(onClick = onToggleFavorite, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable { onToggleFavorite() }
+                            .coffeeFocusHighlight(CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Toggle favorite state on song",
@@ -1956,49 +2297,91 @@ fun FullPlayerScreen(
                         )
                     }
 
-                    // Previous Button
-                    IconButton(onClick = onPrevious, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Skip previous track button", tint = warmCream, modifier = Modifier.size(36.dp))
-                    }
-
-                    // Play / Pause Circle Tactile button
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(coffeeBrown)
-                            .coffeeFocusHighlight(CircleShape)
-                            .clickable { onPlayPause() },
-                        contentAlignment = Alignment.Center
+                    // Media Controls clustered together in the center with zero-padding clicks
+                    @OptIn(ExperimentalMaterial3Api::class)
+                    CompositionLocalProvider(
+                        LocalMinimumInteractiveComponentSize provides 0.dp
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = "Primary player playback controller",
-                            tint = deepEspresso,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Previous Button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onPrevious() }
+                                    .coffeeFocusHighlight(CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipPrevious,
+                                    contentDescription = "Skip previous track button",
+                                    tint = warmCream,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
 
-                    // Next Button
-                    IconButton(onClick = onNext, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Skip next track button", tint = warmCream, modifier = Modifier.size(36.dp))
+                            // Play / Pause Circle Tactile button
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(coffeeBrown)
+                                    .clickable { onPlayPause() }
+                                    .coffeeFocusHighlight(CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Primary player playback controller",
+                                    tint = deepEspresso,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+
+                            // Next Button
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onNext() }
+                                    .coffeeFocusHighlight(CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipNext,
+                                    contentDescription = "Skip next track button",
+                                    tint = warmCream,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
                     }
 
                     // Playback order modes toggles (Shuffle / Repeat)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(
-                            onClick = {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable {
                                 val trigger = (0..1).random()
                                 if (trigger == 0) onToggleShuffle() else onToggleRepeat()
-                            },
-                            modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)
-                        ) {
-                            val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
-                                if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
                             }
-                            val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
-                            Icon(imageVector = icon, contentDescription = "Toggle play sequence order type", tint = tint, modifier = Modifier.size(22.dp))
+                            .coffeeFocusHighlight(CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
+                            if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
                         }
+                        val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Toggle play sequence order type",
+                            tint = tint,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
             }

@@ -67,6 +67,12 @@ interface SongDao {
     """)
     fun getSongsForPlaylist(playlistId: Int): Flow<List<SongEntity>>
 
+    @Query("DELETE FROM songs WHERE id = :songId")
+    suspend fun deleteSong(songId: String)
+
+    @Query("DELETE FROM playlist_song_cross_ref WHERE songId = :songId")
+    suspend fun deletePlaylistSongCrossRefs(songId: String)
+
     @Query("UPDATE playlists SET songCount = (SELECT COUNT(*) FROM playlist_song_cross_ref WHERE playlistId = :playlistId) WHERE id = :playlistId")
     suspend fun updatePlaylistSongCount(playlistId: Int)
 }
