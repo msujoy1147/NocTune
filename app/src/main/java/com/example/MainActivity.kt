@@ -327,7 +327,10 @@ fun MainAppScreen(
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                             currentSong = currentSong,
                             isPlaying = isPlaying,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            onAddSongsToPlaylist = { songsList, playlist ->
+                                songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                            }
                         )
                         
                         "search" -> SearchScreen(
@@ -341,7 +344,12 @@ fun MainAppScreen(
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                             currentSong = currentSong,
                             isPlaying = isPlaying,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            playlists = playlists,
+                            onAddSongsToPlaylist = { songsList, playlist ->
+                                songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                            },
+                            onCreatePlaylistRequest = { showCreatePlaylistInput = true }
                         )
                     }
 
@@ -535,7 +543,10 @@ fun MainAppScreen(
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                                     currentSong = currentSong,
                                     isPlaying = isPlaying,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize(),
+                                    onAddSongsToPlaylist = { songsList, playlist ->
+                                        songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                    }
                                 )
                                 
                                 "search" -> SearchScreen(
@@ -549,7 +560,12 @@ fun MainAppScreen(
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                                     currentSong = currentSong,
                                     isPlaying = isPlaying,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize(),
+                                    playlists = playlists,
+                                    onAddSongsToPlaylist = { songsList, playlist ->
+                                        songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                    },
+                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true }
                                 )
                             }
                         }
@@ -820,7 +836,8 @@ fun LibraryScreen(
     onAddToPlaylistRequest: (SongEntity) -> Unit,
     currentSong: SongEntity? = null,
     isPlaying: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> }
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val deepEspresso = appColors.deepEspresso
@@ -831,7 +848,13 @@ fun LibraryScreen(
     val secondaryText = appColors.secondaryText
     val isNight = appColors.isNight
 
-    var selectedSongForDelete by remember { mutableStateOf<SongEntity?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var activeSongForOptions by remember { mutableStateOf<SongEntity?>(null) }
+    var isMultiSelectMode by remember { mutableStateOf(false) }
+    var selectedSongs by remember { mutableStateOf<Set<SongEntity>>(emptySet()) }
+    var showAddToPlaylistForSongs by remember { mutableStateOf<Set<SongEntity>?>(null) }
+
     var selectedAlbum by remember { mutableStateOf<String?>(null) }
     var selectedArtist by remember { mutableStateOf<String?>(null) }
 
@@ -849,7 +872,11 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { onSelectPlaylist(null) },
+                    onClick = { 
+                        onSelectPlaylist(null)
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back into catalog view button", tint = warmCream)
@@ -962,7 +989,11 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { selectedAlbum = null; selectedSongForDelete = null },
+                    onClick = { 
+                        selectedAlbum = null 
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = warmCream)
@@ -972,22 +1003,37 @@ fun LibraryScreen(
                     Text(text = albumTitle, color = warmCream, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(text = "${albumSongs.size} tracks from this album", color = secondaryText, fontSize = 12.sp)
                 }
-                if (selectedSongForDelete != null) {
-                    Button(
-                        onClick = {
-                            selectedSongForDelete?.let { onDeleteSong(it) }
-                            selectedSongForDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.height(36.dp)
+                if (!isMultiSelectMode && albumSongs.isNotEmpty()) {
+                    IconButton(
+                        onClick = { 
+                            isMultiSelectMode = true
+                            selectedSongs = emptySet()
+                        }
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
                     }
                 }
+            }
+
+            // Multi-selection block
+            if (isMultiSelectMode) {
+                MultiSelectionControlBar(
+                    selectedCount = selectedSongs.size,
+                    totalCount = albumSongs.size,
+                    onSelectAll = { selectedSongs = albumSongs.toSet() },
+                    onDeselectAll = { selectedSongs = emptySet() },
+                    onCancel = { 
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
+                    onAddToPlaylist = { showAddToPlaylistForSongs = selectedSongs },
+                    onDelete = {
+                        selectedSongs.forEach { onDeleteSong(it) }
+                        Toast.makeText(context, "Deleted ${selectedSongs.size} songs", Toast.LENGTH_SHORT).show()
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    }
+                )
             }
 
             if (albumSongs.isEmpty()) {
@@ -1000,17 +1046,30 @@ fun LibraryScreen(
                 ) {
                     items(albumSongs) { song ->
                         val isActive = currentSong?.id == song.id
-                        val isSelected = selectedSongForDelete?.id == song.id
+                        val isSelected = selectedSongs.contains(song)
                         SongListItem(
                             song = song,
                             onClick = { 
-                                selectedSongForDelete = null
-                                onPlaySong(song, albumSongs) 
+                                if (isMultiSelectMode) {
+                                    selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                } else {
+                                    onPlaySong(song, albumSongs) 
+                                }
                             },
-                            onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                            onLongClick = { 
+                                if (isMultiSelectMode) {
+                                    selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                } else {
+                                    activeSongForOptions = song
+                                }
+                            },
                             isPlaying = isPlaying,
                             isActive = isActive,
-                            isHighlighted = isSelected
+                            showCheckbox = isMultiSelectMode,
+                            checked = isSelected,
+                            onCheckedChange = { checked ->
+                                selectedSongs = if (checked) selectedSongs + song else selectedSongs - song
+                            }
                         )
                     }
                 }
@@ -1026,7 +1085,11 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = { selectedArtist = null; selectedSongForDelete = null },
+                    onClick = { 
+                        selectedArtist = null 
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
                     modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = warmCream)
@@ -1036,22 +1099,37 @@ fun LibraryScreen(
                     Text(text = artistName, color = warmCream, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(text = "${artistSongs.size} tracks by this artist", color = secondaryText, fontSize = 12.sp)
                 }
-                if (selectedSongForDelete != null) {
-                    Button(
-                        onClick = {
-                            selectedSongForDelete?.let { onDeleteSong(it) }
-                            selectedSongForDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.height(36.dp)
+                if (!isMultiSelectMode && artistSongs.isNotEmpty()) {
+                    IconButton(
+                        onClick = { 
+                            isMultiSelectMode = true
+                            selectedSongs = emptySet()
+                        }
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
                     }
                 }
+            }
+
+            // Multi-selection block
+            if (isMultiSelectMode) {
+                MultiSelectionControlBar(
+                    selectedCount = selectedSongs.size,
+                    totalCount = artistSongs.size,
+                    onSelectAll = { selectedSongs = artistSongs.toSet() },
+                    onDeselectAll = { selectedSongs = emptySet() },
+                    onCancel = { 
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
+                    onAddToPlaylist = { showAddToPlaylistForSongs = selectedSongs },
+                    onDelete = {
+                        selectedSongs.forEach { onDeleteSong(it) }
+                        Toast.makeText(context, "Deleted ${selectedSongs.size} songs", Toast.LENGTH_SHORT).show()
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    }
+                )
             }
 
             if (artistSongs.isEmpty()) {
@@ -1064,17 +1142,30 @@ fun LibraryScreen(
                 ) {
                     items(artistSongs) { song ->
                         val isActive = currentSong?.id == song.id
-                        val isSelected = selectedSongForDelete?.id == song.id
+                        val isSelected = selectedSongs.contains(song)
                         SongListItem(
                             song = song,
                             onClick = { 
-                                selectedSongForDelete = null
-                                onPlaySong(song, artistSongs) 
+                                if (isMultiSelectMode) {
+                                    selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                } else {
+                                    onPlaySong(song, artistSongs) 
+                                }
                             },
-                            onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                            onLongClick = { 
+                                if (isMultiSelectMode) {
+                                    selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                } else {
+                                    activeSongForOptions = song
+                                }
+                            },
                             isPlaying = isPlaying,
                             isActive = isActive,
-                            isHighlighted = isSelected
+                            showCheckbox = isMultiSelectMode,
+                            checked = isSelected,
+                            onCheckedChange = { checked ->
+                                selectedSongs = if (checked) selectedSongs + song else selectedSongs - song
+                            }
                         )
                     }
                 }
@@ -1094,30 +1185,20 @@ fun LibraryScreen(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
-                if (selectedSongForDelete != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconButton(onClick = { selectedSongForDelete = null }) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = secondaryText)
-                        }
-                        Button(
-                            onClick = {
-                                selectedSongForDelete?.let { onDeleteSong(it) }
-                                selectedSongForDelete = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(36.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (!isMultiSelectMode && activeSection == "songs" && songs.isNotEmpty()) {
+                        IconButton(
+                            onClick = { 
+                                isMultiSelectMode = true
+                                selectedSongs = emptySet()
+                            }
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
                         }
                     }
-                } else {
                     IconButton(
                         onClick = onToggleNightMode,
                         modifier = Modifier.size(48.dp).testTag("night_mode_toggle_library")
@@ -1130,6 +1211,27 @@ fun LibraryScreen(
                         )
                     }
                 }
+            }
+
+            // Multi-selection block for "songs" tab
+            if (isMultiSelectMode && activeSection == "songs") {
+                MultiSelectionControlBar(
+                    selectedCount = selectedSongs.size,
+                    totalCount = songs.size,
+                    onSelectAll = { selectedSongs = songs.toSet() },
+                    onDeselectAll = { selectedSongs = emptySet() },
+                    onCancel = { 
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    },
+                    onAddToPlaylist = { showAddToPlaylistForSongs = selectedSongs },
+                    onDelete = {
+                        selectedSongs.forEach { onDeleteSong(it) }
+                        Toast.makeText(context, "Deleted ${selectedSongs.size} songs", Toast.LENGTH_SHORT).show()
+                        isMultiSelectMode = false
+                        selectedSongs = emptySet()
+                    }
+                )
             }
 
             // Section Filter Selectors
@@ -1153,7 +1255,8 @@ fun LibraryScreen(
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) coffeeBrown else darkMocha)
                             .clickable {
-                                selectedSongForDelete = null
+                                isMultiSelectMode = false
+                                selectedSongs = emptySet()
                                 onSectionChange(secId) 
                             }
                             .padding(vertical = 10.dp),
@@ -1179,17 +1282,30 @@ fun LibraryScreen(
                     ) {
                         items(songs) { song ->
                             val isActive = currentSong?.id == song.id
-                            val isSelected = selectedSongForDelete?.id == song.id
+                            val isSelected = selectedSongs.contains(song)
                             SongListItem(
                                 song = song,
                                 onClick = { 
-                                    selectedSongForDelete = null
-                                    onPlaySong(song, songs) 
+                                    if (isMultiSelectMode) {
+                                        selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                    } else {
+                                        onPlaySong(song, songs) 
+                                    }
                                 },
-                                onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                                onLongClick = { 
+                                    if (isMultiSelectMode) {
+                                        selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                                    } else {
+                                        activeSongForOptions = song
+                                    }
+                                },
                                 isPlaying = isPlaying,
                                 isActive = isActive,
-                                isHighlighted = isSelected
+                                showCheckbox = isMultiSelectMode,
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    selectedSongs = if (checked) selectedSongs + song else selectedSongs - song
+                                }
                             )
                         }
                     }
@@ -1363,6 +1479,146 @@ fun LibraryScreen(
             }
         }
     }
+
+    // Helper dialog overlays
+    activeSongForOptions?.let { song ->
+        SongOptionsDialog(
+            song = song,
+            onDismiss = { activeSongForOptions = null },
+            onAddToPlaylist = {
+                activeSongForOptions = null
+                onAddToPlaylistRequest(song)
+            },
+            onDelete = {
+                activeSongForOptions = null
+                onDeleteSong(song)
+                Toast.makeText(context, "Deleted song ${song.title}", Toast.LENGTH_SHORT).show()
+            },
+            onSelectMultiple = {
+                activeSongForOptions = null
+                isMultiSelectMode = true
+                selectedSongs = setOf(song)
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSongs != null) {
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSongs = null },
+            onSelectPlaylist = { playlist ->
+                showAddToPlaylistForSongs?.let { selected ->
+                    onAddSongsToPlaylist(selected.toList(), playlist)
+                    Toast.makeText(context, "${selected.size} songs added to ${playlist.name}", Toast.LENGTH_SHORT).show()
+                }
+                showAddToPlaylistForSongs = null
+                isMultiSelectMode = false
+                selectedSongs = emptySet()
+            },
+            onCreateNewPlaylist = {
+                onCreatePlaylistRequest()
+                showAddToPlaylistForSongs = null
+            }
+        )
+    }
+}
+
+@Composable
+fun MultiSelectionControlBar(
+    selectedCount: Int,
+    totalCount: Int,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onCancel: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val warmCream = appColors.warmCream
+    val coffeeBrown = appColors.coffeeBrown
+    val softLatte = appColors.softLatte
+    val deepEspresso = appColors.deepEspresso
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        color = coffeeBrown.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$selectedCount of $totalCount channels selected",
+                    color = warmCream,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = {
+                            if (selectedCount == totalCount) {
+                                onDeselectAll()
+                            } else {
+                                onSelectAll()
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = if (selectedCount == totalCount) "Deselect All" else "Select All",
+                            color = softLatte,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Default.Close, contentDescription = "Close multi-select mode", tint = warmCream)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        if (selectedCount > 0) {
+                            onAddToPlaylist()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = coffeeBrown),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = deepEspresso)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add to Playlist", color = deepEspresso, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Button(
+                    onClick = {
+                        if (selectedCount > 0) {
+                            onDelete()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+        }
+    }
 }
 
 // ==========================================
@@ -1380,7 +1636,10 @@ fun SearchScreen(
     onAddToPlaylistRequest: (SongEntity) -> Unit,
     currentSong: SongEntity? = null,
     isPlaying: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    playlists: List<PlaylistEntity> = emptyList(),
+    onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> },
+    onCreatePlaylistRequest: () -> Unit = {}
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val darkMocha = appColors.darkMocha
@@ -1388,7 +1647,12 @@ fun SearchScreen(
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
 
-    var selectedSongForDelete by remember { mutableStateOf<SongEntity?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var activeSongForOptions by remember { mutableStateOf<SongEntity?>(null) }
+    var isMultiSelectMode by remember { mutableStateOf(false) }
+    var selectedSongs by remember { mutableStateOf<Set<SongEntity>>(emptySet()) }
+    var showAddToPlaylistForSongs by remember { mutableStateOf<Set<SongEntity>?>(null) }
 
     Column(
         modifier = modifier
@@ -1409,49 +1673,40 @@ fun SearchScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
-            if (selectedSongForDelete != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = { selectedSongForDelete = null }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancel selection", tint = secondaryText)
+                    if (!isMultiSelectMode && songs.isNotEmpty()) {
+                        IconButton(
+                            onClick = { 
+                                isMultiSelectMode = true
+                                selectedSongs = emptySet()
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
+                        }
                     }
-                    Button(
-                        onClick = {
-                            selectedSongForDelete?.let { onDeleteSong(it) }
-                            selectedSongForDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.8f)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.height(36.dp)
+                    IconButton(
+                        onClick = onToggleNightMode,
+                        modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = "Toggle Night/Light Mode",
+                            tint = if (isNightMode) coffeeBrown else Color.Black,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 }
-            } else {
-                IconButton(
-                    onClick = onToggleNightMode,
-                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
-                ) {
-                    Icon(
-                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        contentDescription = "Toggle Night/Light Mode",
-                        tint = if (isNightMode) coffeeBrown else Color.Black,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
         }
 
         // Custom search text field
         OutlinedTextField(
             value = query,
             onValueChange = {
-                selectedSongForDelete = null
+                isMultiSelectMode = false
+                selectedSongs = emptySet()
                 onQueryChange(it)
             },
             placeholder = { Text("Search songs, albums, and artists in NocTune...", color = secondaryText) },
@@ -1469,6 +1724,27 @@ fun SearchScreen(
         )
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Multi-selection bar
+        if (isMultiSelectMode) {
+            MultiSelectionControlBar(
+                selectedCount = selectedSongs.size,
+                totalCount = songs.size,
+                onSelectAll = { selectedSongs = songs.toSet() },
+                onDeselectAll = { selectedSongs = emptySet() },
+                onCancel = { 
+                    isMultiSelectMode = false
+                    selectedSongs = emptySet()
+                },
+                onAddToPlaylist = { showAddToPlaylistForSongs = selectedSongs },
+                onDelete = {
+                    selectedSongs.forEach { onDeleteSong(it) }
+                    Toast.makeText(context, "Deleted ${selectedSongs.size} songs", Toast.LENGTH_SHORT).show()
+                    isMultiSelectMode = false
+                    selectedSongs = emptySet()
+                }
+            )
+        }
 
         // Search Results List
         if (songs.isEmpty()) {
@@ -1492,21 +1768,76 @@ fun SearchScreen(
             ) {
                 items(songs) { song ->
                     val isActive = currentSong?.id == song.id
-                    val isSelected = selectedSongForDelete?.id == song.id
+                    val isSelected = selectedSongs.contains(song)
                     SongListItem(
                          song = song,
                          onClick = { 
-                             selectedSongForDelete = null
-                             onPlaySong(song) 
+                             if (isMultiSelectMode) {
+                                 selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                             } else {
+                                 onPlaySong(song) 
+                             }
                          },
-                         onLongClick = { selectedSongForDelete = if (isSelected) null else song },
+                         onLongClick = { 
+                             if (isMultiSelectMode) {
+                                 selectedSongs = if (isSelected) selectedSongs - song else selectedSongs + song
+                             } else {
+                                 activeSongForOptions = song
+                             }
+                         },
                          isPlaying = isPlaying,
                          isActive = isActive,
-                         isHighlighted = isSelected
+                         showCheckbox = isMultiSelectMode,
+                         checked = isSelected,
+                         onCheckedChange = { checked ->
+                             selectedSongs = if (checked) selectedSongs + song else selectedSongs - song
+                         }
                     )
                 }
             }
         }
+    }
+
+    // Overlay components
+    activeSongForOptions?.let { song ->
+        SongOptionsDialog(
+            song = song,
+            onDismiss = { activeSongForOptions = null },
+            onAddToPlaylist = {
+                activeSongForOptions = null
+                onAddToPlaylistRequest(song)
+            },
+            onDelete = {
+                activeSongForOptions = null
+                onDeleteSong(song)
+                Toast.makeText(context, "Deleted song ${song.title}", Toast.LENGTH_SHORT).show()
+            },
+            onSelectMultiple = {
+                activeSongForOptions = null
+                isMultiSelectMode = true
+                selectedSongs = setOf(song)
+            }
+        )
+    }
+
+    if (showAddToPlaylistForSongs != null) {
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onDismiss = { showAddToPlaylistForSongs = null },
+            onSelectPlaylist = { playlist ->
+                showAddToPlaylistForSongs?.let { selected ->
+                    onAddSongsToPlaylist(selected.toList(), playlist)
+                    Toast.makeText(context, "${selected.size} songs added to ${playlist.name}", Toast.LENGTH_SHORT).show()
+                }
+                showAddToPlaylistForSongs = null
+                isMultiSelectMode = false
+                selectedSongs = emptySet()
+            },
+            onCreateNewPlaylist = {
+                onCreatePlaylistRequest()
+                showAddToPlaylistForSongs = null
+            }
+        )
     }
 }
 
@@ -1577,7 +1908,10 @@ fun SongListItem(
     onLongClick: () -> Unit,
     isPlaying: Boolean = false,
     isActive: Boolean = false,
-    isHighlighted: Boolean = false
+    isHighlighted: Boolean = false,
+    showCheckbox: Boolean = false,
+    checked: Boolean = false,
+    onCheckedChange: ((Boolean) -> Unit)? = null
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val warmCream = appColors.warmCream
@@ -1585,6 +1919,7 @@ fun SongListItem(
     val isNight = appColors.isNight
     val coffeeBrown = appColors.coffeeBrown
     val softLatte = appColors.softLatte
+    val deepEspresso = appColors.deepEspresso
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1602,6 +1937,18 @@ fun SongListItem(
                 .padding(vertical = 12.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (showCheckbox) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = coffeeBrown,
+                        uncheckedColor = secondaryText,
+                        checkmarkColor = deepEspresso
+                    ),
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
             // Elegant rounded-square music note container from 2nd picture style
             Box(
                 modifier = Modifier
@@ -1844,14 +2191,43 @@ fun FullPlayerScreen(
     val warmCream = appColors.warmCream
     val secondaryText = appColors.secondaryText
 
+    var showRemainingTime by remember { mutableStateOf(false) }
+
     // Formatted timelines
     val currentFormatted = remember(progress) {
         val totalSeconds = progress / 1000
-        String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
     }
-    val durationFormatted = remember(song.duration) {
-        val totalSeconds = song.duration / 1000
-        String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+    val durationFormatted = remember(progress, song.duration, showRemainingTime) {
+        if (showRemainingTime) {
+            val remainMs = maxOf(0L, song.duration - progress)
+            val totalSeconds = remainMs / 1000
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            val seconds = totalSeconds % 60
+            if (hours > 0) {
+                String.format("-%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format("-%02d:%02d", minutes, seconds)
+            }
+        } else {
+            val totalSeconds = song.duration / 1000
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            val seconds = totalSeconds % 60
+            if (hours > 0) {
+                String.format("%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format("%02d:%02d", minutes, seconds)
+            }
+        }
     }
 
     BoxWithConstraints(
@@ -1922,21 +2298,27 @@ fun FullPlayerScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = song.title,
-                        color = warmCream,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = song.artist,
-                        color = softLatte,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = song.title,
+                            color = warmCream,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = song.artist,
+                            color = softLatte,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 // Right Column: Action controllers, Progress and Status
@@ -2017,8 +2399,22 @@ fun FullPlayerScreen(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = currentFormatted, color = secondaryText, fontSize = 11.sp)
-                            Text(text = durationFormatted, color = secondaryText, fontSize = 11.sp)
+                            Text(
+                                text = currentFormatted,
+                                color = secondaryText,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .clickable { showRemainingTime = !showRemainingTime }
+                                    .padding(8.dp)
+                            )
+                            Text(
+                                text = durationFormatted,
+                                color = secondaryText,
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .clickable { showRemainingTime = !showRemainingTime }
+                                    .padding(8.dp)
+                            )
                         }
                     }
 
@@ -2027,7 +2423,7 @@ fun FullPlayerScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.SpaceAround,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Favorite Button
@@ -2110,25 +2506,23 @@ fun FullPlayerScreen(
                             }
                         }
 
-                        // Playback order modes toggles (Shuffle / Repeat)
+                        // Repeat Button
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .clickable {
-                                    val trigger = (0..1).random()
-                                    if (trigger == 0) onToggleShuffle() else onToggleRepeat()
-                                }
+                                .clickable { onToggleRepeat() }
                                 .coffeeFocusHighlight(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
-                                if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+                            val icon = when (repeatMode) {
+                                RepeatMode.ONE -> Icons.Default.RepeatOne
+                                else -> Icons.Default.Repeat
                             }
-                            val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
+                            val tint = if (repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
                             Icon(
                                 imageVector = icon,
-                                contentDescription = "Play order type toggle indicator",
+                                contentDescription = "Toggle Repeat Mode",
                                 tint = tint,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -2267,8 +2661,22 @@ fun FullPlayerScreen(
                             .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = currentFormatted, color = secondaryText, fontSize = 11.sp)
-                        Text(text = durationFormatted, color = secondaryText, fontSize = 11.sp)
+                        Text(
+                            text = currentFormatted,
+                            color = secondaryText,
+                            fontSize = 11.sp,
+                            modifier = Modifier
+                                .clickable { showRemainingTime = !showRemainingTime }
+                                .padding(8.dp)
+                        )
+                        Text(
+                            text = durationFormatted,
+                            color = secondaryText,
+                            fontSize = 11.sp,
+                            modifier = Modifier
+                                .clickable { showRemainingTime = !showRemainingTime }
+                                .padding(8.dp)
+                        )
                     }
                 }
 
@@ -2276,8 +2684,8 @@ fun FullPlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 32.dp, start = 24.dp, end = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(bottom = 32.dp, start = 16.dp, end = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Favorite Button
@@ -2360,25 +2768,23 @@ fun FullPlayerScreen(
                         }
                     }
 
-                    // Playback order modes toggles (Shuffle / Repeat)
+                    // Repeat Button
                     Box(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .clickable {
-                                val trigger = (0..1).random()
-                                if (trigger == 0) onToggleShuffle() else onToggleRepeat()
-                            }
+                            .clickable { onToggleRepeat() }
                             .coffeeFocusHighlight(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        val icon = if (shuffleEnabled) Icons.Default.Shuffle else {
-                            if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
+                        val icon = when (repeatMode) {
+                            RepeatMode.ONE -> Icons.Default.RepeatOne
+                            else -> Icons.Default.Repeat
                         }
-                        val tint = if (shuffleEnabled || repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
+                        val tint = if (repeatMode != RepeatMode.OFF) coffeeBrown else warmCream
                         Icon(
                             imageVector = icon,
-                            contentDescription = "Toggle play sequence order type",
+                            contentDescription = "Toggle Repeat Mode",
                             tint = tint,
                             modifier = Modifier.size(22.dp)
                         )
