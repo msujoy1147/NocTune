@@ -179,7 +179,8 @@ object MusicPlayerManager {
                 if (song.path.startsWith("content://")) {
                     setDataSource(ctx, android.net.Uri.parse(song.path))
                 } else {
-                    setDataSource(song.path)
+                    val fileUri = android.net.Uri.fromFile(java.io.File(song.path))
+                    setDataSource(ctx, fileUri)
                 }
                 prepare()
                 if (_currentPosition.value > 0) {
