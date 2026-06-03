@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/img_app_id_icon_1780158403081"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    
+    <group
+        android:translateX="4"
+        android:translateY="4"
+        android:pivotX="12"
+        android:pivotY="12"
+        android:scaleX="1.15"
+        android:scaleY="1.15">
+        
+        <!-- Beautiful Soft Backdrop Drop-Shadow 1 -->
+        <path
+            android:fillColor="#15002D62"
+            android:pathData="M12.5,3.8 v10.55 c-0.59,-0.34 -1.27,-0.55 -2,-0.55 c-2.21,0 -4,1.79 -4,4 s1.79,4 4,4 s4,-1.79 4,-4 V7.8 c2,0 4,1.5 4,4 V9 c0,-2.76 -2.24,-5 -4,-5 z" />
+        
+        <!-- Beautiful Soft Backdrop Drop-Shadow 2 -->
+        <path
+            android:fillColor="#1F004294"
+            android:pathData="M12.3,3.4 v10.55 c-0.59,-0.34 -1.27,-0.55 -2,-0.55 c-2.21,0 -4,1.79 -4,4 s1.79,4 4,4 s4,-1.79 4,-4 V7.4 c2,0 4,1.5 4,4 V8.6 c0,-2.76 -2.24,-5 -4,-5 z" />
+        
+        <!-- Pristine White Eighth Note -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M12,3 v10.55 c-0.59,-0.34 -1.27,-0.55 -2,-0.55 c-2.21,0 -4,1.79 -4,4 s1.79,4 4,4 s4,-1.79 4,-4 V7 c2,0 4,1.5 4,4 V8 c0,-2.76 -2.24,-5 -4,-5 z" />
+            
+    </group>
+</vector>
