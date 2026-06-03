@@ -115,10 +115,10 @@ class NocTunePlayerService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "NocTune Playback Control",
+                "Noc Tune Playback Control",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Provides notification player controls for NocTune Music Lounge"
+                description = "Provides notification player controls for Noc Tune Music Lounge"
                 setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -131,7 +131,7 @@ class NocTunePlayerService : Service() {
         val isPlaying = MusicPlayerManager.isPlaying.value
         
         val title = song?.title ?: "No Song Loaded"
-        val artist = song?.artist ?: "Relax in the NocTune Espresso lounge"
+        val artist = song?.artist ?: "Relax in the Noc Tune Espresso lounge"
         
         val mainIntent = Intent(this, MainActivity::class.java)
         val mainPendingIntent = PendingIntent.getActivity(

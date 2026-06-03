@@ -176,12 +176,12 @@ object MusicPlayerManager {
         val ctx = context ?: return
         mediaPlayer = MediaPlayer().apply {
             try {
-                if (song.path.startsWith("content://")) {
-                    setDataSource(ctx, android.net.Uri.parse(song.path))
+                val songUri = if (song.path.startsWith("content://")) {
+                    android.net.Uri.parse(song.path)
                 } else {
-                    val fileUri = android.net.Uri.fromFile(java.io.File(song.path))
-                    setDataSource(ctx, fileUri)
+                    android.net.Uri.fromFile(java.io.File(song.path))
                 }
+                setDataSource(ctx, songUri)
                 prepare()
                 if (_currentPosition.value > 0) {
                     seekTo(_currentPosition.value.toInt())

@@ -46,19 +46,19 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = SecondaryText
 )
 
-private val LightColorScheme = darkColorScheme( // Also use darkColorScheme for twilight mode to protect the eyes completely
+private val LightColorScheme = lightColorScheme(
     primary = CoffeeBrown,
     secondary = SoftLatte,
-    tertiary = WarmCream,
-    background = Color(0xFF0F0B1E), // Soft midnight twilight background (very dim and gentle)
-    surface = Color(0xFF16112C),    // Cozy twilight surface/card background
-    onPrimary = WarmCream,
-    onSecondary = Color(0xFF0F0B1E),
-    onTertiary = Color(0xFF0F0B1E),
-    onBackground = WarmCream,
-    onSurface = WarmCream,
-    surfaceVariant = Color(0xFF16112C),
-    onSurfaceVariant = SecondaryText
+    tertiary = Color(0xFF140D2B),
+    background = Color(0xFFFFFFFF), // Pure white background
+    surface = Color(0xFFF4F3F8),    // Clean elegant surface/card background
+    onPrimary = Color(0xFFFFFFFF),
+    onSecondary = Color(0xFFFFFFFF),
+    onTertiary = Color(0xFF040209),
+    onBackground = Color(0xFF140D2B),
+    onSurface = Color(0xFF140D2B),
+    surfaceVariant = Color(0xFFF4F3F8),
+    onSurfaceVariant = Color(0xFF6E6E73)
 )
 
 @Composable
@@ -80,12 +80,12 @@ fun NocTuneTheme(
         )
     } else {
         AppColors(
-            deepEspresso = Color(0xFF0F0B1E), // Soft twilight dark purple
-            darkMocha = Color(0xFF16112C),    // Cozy twilight surface/card background
+            deepEspresso = Color(0xFFFFFFFF), // Pure white background in Light Mode
+            darkMocha = Color(0xFFF4F3F8),    // Cool, light grey-purple surface for cards
             coffeeBrown = CoffeeBrown,
             softLatte = SoftLatte,
-            warmCream = WarmCream,
-            secondaryText = SecondaryText,
+            warmCream = Color(0xFF140D2B),    // Deep rich dark purple for high readability primary text
+            secondaryText = Color(0xFF6E6E73), // Professional contrast secondary grey text
             isNight = false
         )
     }

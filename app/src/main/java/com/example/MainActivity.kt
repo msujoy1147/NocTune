@@ -142,6 +142,7 @@ fun MainAppScreen(
     var showCreatePlaylistInput by remember { mutableStateOf(false) }
     var showAddToPlaylistSelector by remember { mutableStateOf<SongEntity?>(null) }
     var showQueueDrawer by remember { mutableStateOf(false) }
+    var showEqualizerPanel by remember { mutableStateOf(false) }
 
     // App dynamic visuals Constants from Theme
     val appColors = com.example.ui.theme.LocalAppColors.current
@@ -154,9 +155,10 @@ fun MainAppScreen(
 
     // System Back Press Handler for smooth and robust navigation
     androidx.activity.compose.BackHandler(
-        enabled = expandedPlayer || showQueueDrawer || showSleepTimerMenu || showAddToPlaylistSelector != null || showCreatePlaylistInput || selectedPlaylist != null || currentTab != "home"
+        enabled = expandedPlayer || showQueueDrawer || showSleepTimerMenu || showAddToPlaylistSelector != null || showCreatePlaylistInput || selectedPlaylist != null || currentTab != "home" || showEqualizerPanel
     ) {
         when {
+            showEqualizerPanel -> showEqualizerPanel = false
             showQueueDrawer -> showQueueDrawer = false
             showSleepTimerMenu -> showSleepTimerMenu = false
             showAddToPlaylistSelector != null -> showAddToPlaylistSelector = null
@@ -330,7 +332,8 @@ fun MainAppScreen(
                             modifier = Modifier.fillMaxSize(),
                             onAddSongsToPlaylist = { songsList, playlist ->
                                 songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                            }
+                            },
+                            onTriggerEqualizer = { showEqualizerPanel = true }
                         )
                         
                         "search" -> SearchScreen(
@@ -423,7 +426,7 @@ fun MainAppScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "NocTune",
+                                text = "Noc Tune",
                                 color = warmCream,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -546,7 +549,8 @@ fun MainAppScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     onAddSongsToPlaylist = { songsList, playlist ->
                                         songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                                    }
+                                    },
+                                    onTriggerEqualizer = { showEqualizerPanel = true }
                                 )
                                 
                                 "search" -> SearchScreen(
@@ -678,6 +682,15 @@ fun MainAppScreen(
             onCreateNewPlaylist = { showCreatePlaylistInput = true }
         )
     }
+
+    // Dialog: Equalizer panel
+    if (showEqualizerPanel) {
+        EqualizerPanel(
+            isPlaying = isPlaying,
+            isNightMode = isNightMode,
+            onDismissRequest = { showEqualizerPanel = false }
+        )
+    }
 }
 
 // ==========================================
@@ -731,7 +744,7 @@ fun HomeScreen(
                     Icon(
                         imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
                         contentDescription = "Toggle Night/Light Mode",
-                        tint = if (isNightMode) coffeeBrown else Color.Black,
+                        tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -837,7 +850,8 @@ fun LibraryScreen(
     currentSong: SongEntity? = null,
     isPlaying: Boolean = false,
     modifier: Modifier = Modifier,
-    onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> }
+    onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> },
+    onTriggerEqualizer: () -> Unit = {}
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val deepEspresso = appColors.deepEspresso
@@ -1189,15 +1203,16 @@ fun LibraryScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (!isMultiSelectMode && activeSection == "songs" && songs.isNotEmpty()) {
-                        IconButton(
-                            onClick = { 
-                                isMultiSelectMode = true
-                                selectedSongs = emptySet()
-                            }
-                        ) {
-                            Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
-                        }
+                    IconButton(
+                        onClick = onTriggerEqualizer,
+                        modifier = Modifier.size(48.dp).testTag("equalizer_button_library")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Trigger Sound Equalizer",
+                            tint = warmCream,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                     IconButton(
                         onClick = onToggleNightMode,
@@ -1206,7 +1221,7 @@ fun LibraryScreen(
                         Icon(
                             imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
                             contentDescription = "Toggle Night/Light Mode",
-                            tint = if (isNightMode) coffeeBrown else Color.Black,
+                            tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -1677,16 +1692,6 @@ fun SearchScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (!isMultiSelectMode && songs.isNotEmpty()) {
-                        IconButton(
-                            onClick = { 
-                                isMultiSelectMode = true
-                                selectedSongs = emptySet()
-                            }
-                        ) {
-                            Icon(imageVector = Icons.Default.Checklist, contentDescription = "Select songs", tint = warmCream)
-                        }
-                    }
                     IconButton(
                         onClick = onToggleNightMode,
                         modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
@@ -1694,7 +1699,7 @@ fun SearchScreen(
                         Icon(
                             imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
                             contentDescription = "Toggle Night/Light Mode",
-                            tint = if (isNightMode) coffeeBrown else Color.Black,
+                            tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -1709,7 +1714,7 @@ fun SearchScreen(
                 selectedSongs = emptySet()
                 onQueryChange(it)
             },
-            placeholder = { Text("Search songs, albums, and artists in NocTune...", color = secondaryText) },
+            placeholder = { Text("Search songs, albums, and artists in Noc Tune...", color = secondaryText) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Active search trigger magnifier", tint = secondaryText) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = coffeeBrown,
@@ -2340,7 +2345,7 @@ fun FullPlayerScreen(
                             Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize full player button", tint = warmCream, modifier = Modifier.size(32.dp))
                         }
                         Text(
-                            text = "NocTune Active Lounge",
+                            text = "Noc Tune Active Lounge",
                             color = warmCream,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
@@ -2553,7 +2558,7 @@ fun FullPlayerScreen(
                     }
                     
                     Text(
-                        text = "NocTune Active Lounge",
+                        text = "Noc Tune Active Lounge",
                         color = warmCream,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
