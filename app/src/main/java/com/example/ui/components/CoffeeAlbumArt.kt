@@ -116,6 +116,7 @@ fun CoffeeAlbumArtContent(
     val coffeeBrown = appColors.coffeeBrown
     val softLatte = appColors.softLatte
     val warmCream = appColors.warmCream
+    val themeBrightness = appColors.themeBrightness
 
     Box(
         modifier = modifier
@@ -287,6 +288,15 @@ fun CoffeeAlbumArtContent(
                     color = deepEspresso,
                     radius = radius * 0.04f,
                     center = center
+                )
+            }
+
+            // Apply theme brightness overlay
+            if (themeBrightness < 1.0f) {
+                drawRect(
+                    color = Color.Black,
+                    alpha = 1f - themeBrightness,
+                    size = size
                 )
             }
         }

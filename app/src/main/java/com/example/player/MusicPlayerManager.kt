@@ -64,7 +64,12 @@ object MusicPlayerManager {
 
     fun init(ctx: Context) {
         if (context != null) return
-        this.context = ctx.applicationContext
+        val appContext = ctx.applicationContext
+        this.context = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            appContext.createAttributionContext("mediaPlayback")
+        } else {
+            appContext
+        }
         loadSavedState()
     }
 
@@ -210,7 +215,8 @@ object MusicPlayerManager {
     }
 
     private fun startGenerativeAudio(song: SongEntity) {
-        generativeSynth.start(song.generativePreset)
+        val ctx = context ?: return
+        generativeSynth.start(ctx, song.generativePreset)
     }
 
     private suspend fun handlePlaybackError() {
@@ -256,7 +262,8 @@ object MusicPlayerManager {
         val song = _currentSong.value ?: return
         
         if (song.isGenerative) {
-            generativeSynth.start(song.generativePreset)
+            val ctx = context ?: return
+            generativeSynth.start(ctx, song.generativePreset)
         } else {
             try {
                 mediaPlayer?.start() ?: run {

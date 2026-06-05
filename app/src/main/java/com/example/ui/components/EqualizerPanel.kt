@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,19 +66,72 @@ fun EqualizerPanel(
     onDismissRequest: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("noctune_equalizer_prefs", Context.MODE_PRIVATE) }
 
-    // Equalizer state holding the 10 band gains
-    var activePreset by remember { mutableStateOf("Normal") }
+    // Utility serialization functions for band gains
+    fun parseGains(gainsStr: String?): List<Float> {
+        if (gainsStr.isNullOrEmpty()) return EQUALIZER_PRESETS["Normal"] ?: List(10) { 0f }
+        return try {
+            gainsStr.split(",").map { it.toFloat() }
+        } catch (e: Exception) {
+            EQUALIZER_PRESETS["Normal"] ?: List(10) { 0f }
+        }
+    }
+
+    fun serializeGains(gains: List<Float>): String {
+        return gains.joinToString(",")
+    }
+
+    // Equalizer state holding the 10 band gains loaded / stored in SharedPreferences
+    var activePreset by remember { 
+        mutableStateOf(prefs.getString("active_preset", "Normal") ?: "Normal") 
+    }
     var bandGains by remember { 
-        mutableStateOf(EQUALIZER_PRESETS["Normal"] ?: List(10) { 0f }) 
+        mutableStateOf(parseGains(prefs.getString("band_gains", null))) 
     }
 
     // Toggle states for luxurious effects
-    var bassBoostEnabled by remember { mutableStateOf(true) }
-    var virtualizerEnabled by remember { mutableStateOf(false) }
-    var reverbEnabled by remember { mutableStateOf(false) }
-    var surroundEnabled by remember { mutableStateOf(true) }
-    var loudnessEnabled by remember { mutableStateOf(false) }
+    var bassBoostEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("bass_boost", true)) 
+    }
+    var virtualizerEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("virtualizer", false)) 
+    }
+    var reverbEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("reverb", false)) 
+    }
+    var surroundEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("surround", true)) 
+    }
+    var loudnessEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("loudness", false)) 
+    }
+    var stereoMusicEnabled by remember { 
+        mutableStateOf(prefs.getBoolean("stereo_music", false)) 
+    }
+
+    // Unified helper to save state to preferences
+    fun saveToPrefs() {
+        prefs.edit().apply {
+            putString("active_preset", activePreset)
+            putString("band_gains", serializeGains(bandGains))
+            putBoolean("bass_boost", bassBoostEnabled)
+            putBoolean("virtualizer", virtualizerEnabled)
+            putBoolean("reverb", reverbEnabled)
+            putBoolean("surround", surroundEnabled)
+            putBoolean("loudness", loudnessEnabled)
+            putBoolean("stereo_music", stereoMusicEnabled)
+            apply()
+        }
+    }
+
+    // Reactively save state on any modification
+    LaunchedEffect(
+        activePreset, bandGains, bassBoostEnabled, virtualizerEnabled, 
+        reverbEnabled, surroundEnabled, loudnessEnabled, stereoMusicEnabled
+    ) {
+        saveToPrefs()
+    }
 
     // Helper to load presets
     fun loadPreset(presetName: String) {
@@ -402,13 +457,14 @@ fun EqualizerPanel(
                                 modifier = Modifier.padding(horizontal = 4.dp)
                             )
 
-                            // 5 toggles listed in vertical layout or paired in elegant grid columns
+                            // 6 toggles listed in vertical layout or paired in elegant grid columns
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 val switches = listOf(
                                     ToggleFXData("Bass Boost", "Supercharge low-end sub frequencies", bassBoostEnabled) { bassBoostEnabled = it },
                                     ToggleFXData("Hi-Fi Virtualizer", "Simulate wide spatial acoustic fields", virtualizerEnabled) { virtualizerEnabled = it },
                                     ToggleFXData("Studio Reverb", "Warm room ambience and classic decays", reverbEnabled) { reverbEnabled = it },
                                     ToggleFXData("3D Surround Sound", "Enrich spatial immersive channels", surroundEnabled) { surroundEnabled = it },
+                                    ToggleFXData("Stereo Music", "Optimized acoustic separation for stereo music", stereoMusicEnabled) { stereoMusicEnabled = it },
                                     ToggleFXData("Master Loudness", "Dynamic loudness enhancement curves", loudnessEnabled) { loudnessEnabled = it }
                                 )
 
@@ -425,6 +481,47 @@ fun EqualizerPanel(
                                     )
                                 }
                             }
+                        }
+
+                        // Section 5: Reset Equalizer Action
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                activePreset = "Normal"
+                                bandGains = EQUALIZER_PRESETS["Normal"] ?: List(10) { 0f }
+                                bassBoostEnabled = true
+                                virtualizerEnabled = false
+                                reverbEnabled = false
+                                surroundEnabled = true
+                                loudnessEnabled = false
+                                stereoMusicEnabled = false
+                                Toast.makeText(context, "Equalizer Reset Successfully", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("reset_equalizer_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = coffeeBrown,
+                                contentColor = warmCream
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, warmCream.copy(alpha = 0.25f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Reset Equalizer",
+                                tint = warmCream,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "RESET EQUALIZER",
+                                color = warmCream,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
                         }
                     }
                 }

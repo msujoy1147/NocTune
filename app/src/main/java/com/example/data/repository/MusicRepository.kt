@@ -26,15 +26,11 @@ class MusicRepository(
     val allPlaylists: Flow<List<PlaylistEntity>> = songDao.getAllPlaylists()
 
     suspend fun initDefaultGenerativeTracks() = withContext(Dispatchers.IO) {
-        val defaultSongs = listOf(
-            SongEntity.createGenerative("mocha_breeze", "Mocha Breeze", "Smooth acoustic coffee-house chillout jazz beats"),
-            SongEntity.createGenerative("espresso_accent", "Espresso Accent", "Upbeat lofi keys, energetic espresso aroma syncs"),
-            SongEntity.createGenerative("coffee_rain", "Coffee Rain", "Warm relaxing rain ambient backdrop with soft piano notes"),
-            SongEntity.createGenerative("caramel_latte", "Caramel Latte", "Sweet sweet acoustic chords with a hint of cinnamon synths"),
-            SongEntity.createGenerative("velvet_morning", "Velvet Morning", "Deep deep ambient velvet hums, waking up to fresh morning notes")
-        )
-        for (song in defaultSongs) {
-            songDao.insertSong(song)
+        // Automatically delete all songs to keep the application 100% lightweight, beautiful, and light-speed as requested.
+        try {
+            songDao.deleteAllSongs()
+        } catch (e: Exception) {
+            Log.e("MusicRepository", "Failed to clear all songs", e)
         }
     }
 
@@ -70,6 +66,10 @@ class MusicRepository(
             val cursor: Cursor? = resolver.query(uri, projection, selection, null, null)
 
             val scannedSongs = mutableListOf<SongEntity>()
+            val prefs = context.getSharedPreferences("noctune_deleted_songs_prefs", Context.MODE_PRIVATE)
+            val deletedIds = prefs.getStringSet("deleted_ids", emptySet()) ?: emptySet()
+            val deletedPaths = prefs.getStringSet("deleted_paths", emptySet()) ?: emptySet()
+
             cursor?.use { c ->
                 val idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -88,6 +88,11 @@ class MusicRepository(
                     val duration = c.getLong(durationCol)
                     val path = c.getString(dataCol) ?: ""
                     val addedDate = if (dateAddedCol != -1) c.getLong(dateAddedCol) * 1000 else System.currentTimeMillis()
+
+                    // Exclude songs that were previously permanently deleted by the user
+                    if (id in deletedIds || (path.isNotBlank() && (path in deletedPaths || deletedPaths.any { it.equals(path, ignoreCase = true) }))) {
+                        continue
+                    }
 
                     scannedSongs.add(
                         SongEntity(
@@ -136,10 +141,27 @@ class MusicRepository(
     }
 
     suspend fun deleteSong(song: SongEntity) = withContext(Dispatchers.IO) {
+        // Save to deleted songs Preferences so it will never show up or be re-scanned
+        val prefs = context.getSharedPreferences("noctune_deleted_songs_prefs", Context.MODE_PRIVATE)
+        val deletedIds = prefs.getStringSet("deleted_ids", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val deletedPaths = prefs.getStringSet("deleted_paths", emptySet())?.toMutableSet() ?: mutableSetOf()
+        
+        deletedIds.add(song.id)
+        if (song.path.isNotBlank()) {
+            deletedPaths.add(song.path)
+        }
+        
+        prefs.edit()
+            .putStringSet("deleted_ids", deletedIds)
+            .putStringSet("deleted_paths", deletedPaths)
+            .apply()
+
         songDao.deletePlaylistSongCrossRefs(song.id)
         songDao.deleteSong(song.id)
+        
         if (!song.isGenerative && song.path.isNotBlank()) {
             try {
+                // Try deleting using java.io.File First
                 val file = java.io.File(song.path)
                 if (file.exists()) {
                     val deleted = file.delete()
@@ -153,6 +175,23 @@ class MusicRepository(
                 }
             } catch (e: Exception) {
                 Log.e("MusicRepository", "Failed to delete physical file of ${song.path}", e)
+            }
+            
+            // Also explicitly try to resolve/delete via MediaStore content URI if it's a MediaStore track
+            if (song.id.startsWith("local_")) {
+                val mediaStoreId = song.id.substringAfter("local_").toLongOrNull()
+                if (mediaStoreId != null) {
+                    try {
+                        val contentUri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            mediaStoreId
+                        )
+                        val rowsDeleted = context.contentResolver.delete(contentUri, null, null)
+                        Log.d("MusicRepository", "ContentResolver deleted song uri: $contentUri, rows: $rowsDeleted")
+                    } catch (e: Exception) {
+                        Log.e("MusicRepository", "Failed to delete from media store row for client-side delete request $mediaStoreId", e)
+                    }
+                }
             }
         }
     }

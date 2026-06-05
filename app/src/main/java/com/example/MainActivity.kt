@@ -15,6 +15,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -169,6 +170,7 @@ fun MainAppScreen(
     var showAddToPlaylistSelector by remember { mutableStateOf<SongEntity?>(null) }
     var showQueueDrawer by remember { mutableStateOf(false) }
     var showEqualizerPanel by remember { mutableStateOf(false) }
+    var showGlobalThemeDialog by remember { mutableStateOf(false) }
 
     // App dynamic visuals Constants from Theme
     val appColors = com.example.ui.theme.LocalAppColors.current
@@ -181,9 +183,10 @@ fun MainAppScreen(
 
     // System Back Press Handler for smooth and robust navigation
     androidx.activity.compose.BackHandler(
-        enabled = expandedPlayer || showQueueDrawer || showSleepTimerMenu || showAddToPlaylistSelector != null || showCreatePlaylistInput || selectedPlaylist != null || currentTab != "home" || showEqualizerPanel
+        enabled = expandedPlayer || showQueueDrawer || showSleepTimerMenu || showAddToPlaylistSelector != null || showCreatePlaylistInput || selectedPlaylist != null || currentTab != "home" || showEqualizerPanel || showGlobalThemeDialog
     ) {
         when {
+            showGlobalThemeDialog -> showGlobalThemeDialog = false
             showEqualizerPanel -> showEqualizerPanel = false
             showQueueDrawer -> showQueueDrawer = false
             showSleepTimerMenu -> showSleepTimerMenu = false
@@ -334,6 +337,9 @@ fun MainAppScreen(
                             onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                             isNightMode = isNightMode,
                             onToggleNightMode = onToggleNightMode,
+                            onTriggerTheme = { showGlobalThemeDialog = true },
+                            onTriggerSleepTimer = { showSleepTimerMenu = true },
+                            onTriggerEqualizer = { showEqualizerPanel = true },
                             modifier = Modifier.fillMaxSize()
                         )
                         
@@ -359,7 +365,9 @@ fun MainAppScreen(
                             onAddSongsToPlaylist = { songsList, playlist ->
                                 songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
                             },
-                            onTriggerEqualizer = { showEqualizerPanel = true }
+                            onTriggerEqualizer = { showEqualizerPanel = true },
+                            onTriggerTheme = { showGlobalThemeDialog = true },
+                            onTriggerSleepTimer = { showSleepTimerMenu = true }
                         )
                         
                         "search" -> SearchScreen(
@@ -378,7 +386,10 @@ fun MainAppScreen(
                             onAddSongsToPlaylist = { songsList, playlist ->
                                 songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
                             },
-                            onCreatePlaylistRequest = { showCreatePlaylistInput = true }
+                            onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                            onTriggerTheme = { showGlobalThemeDialog = true },
+                            onTriggerSleepTimer = { showSleepTimerMenu = true },
+                            onTriggerEqualizer = { showEqualizerPanel = true }
                         )
                     }
 
@@ -556,6 +567,9 @@ fun MainAppScreen(
                                     onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
                                     isNightMode = isNightMode,
                                     onToggleNightMode = onToggleNightMode,
+                                    onTriggerTheme = { showGlobalThemeDialog = true },
+                                    onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                    onTriggerEqualizer = { showEqualizerPanel = true },
                                     modifier = Modifier.fillMaxSize()
                                 )
                                 
@@ -581,7 +595,9 @@ fun MainAppScreen(
                                     onAddSongsToPlaylist = { songsList, playlist ->
                                         songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
                                     },
-                                    onTriggerEqualizer = { showEqualizerPanel = true }
+                                    onTriggerEqualizer = { showEqualizerPanel = true },
+                                    onTriggerTheme = { showGlobalThemeDialog = true },
+                                    onTriggerSleepTimer = { showSleepTimerMenu = true }
                                 )
                                 
                                 "search" -> SearchScreen(
@@ -600,7 +616,10 @@ fun MainAppScreen(
                                     onAddSongsToPlaylist = { songsList, playlist ->
                                         songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
                                     },
-                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true }
+                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                    onTriggerTheme = { showGlobalThemeDialog = true },
+                                    onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                    onTriggerEqualizer = { showEqualizerPanel = true }
                                 )
                             }
                         }
@@ -727,6 +746,16 @@ fun MainAppScreen(
             onDismissRequest = { showEqualizerPanel = false }
         )
     }
+
+    if (showGlobalThemeDialog) {
+        ThemeColorPickerDialog(
+            currentThemeColorHex = themeColorHex,
+            themeBrightness = themeBrightness,
+            onBrightnessChanged = onChangeThemeBrightness,
+            onColorSelected = onChangeThemeColor,
+            onDismissRequest = { showGlobalThemeDialog = false }
+        )
+    }
 }
 
 // ==========================================
@@ -743,6 +772,9 @@ fun HomeScreen(
     onAddToPlaylistRequest: (SongEntity) -> Unit,
     isNightMode: Boolean,
     onToggleNightMode: () -> Unit,
+    onTriggerTheme: () -> Unit = {},
+    onTriggerSleepTimer: () -> Unit = {},
+    onTriggerEqualizer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
@@ -773,15 +805,26 @@ fun HomeScreen(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
-                IconButton(
-                    onClick = onToggleNightMode,
-                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_btn")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        contentDescription = "Toggle Night/Light Mode",
-                        tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
-                        modifier = Modifier.size(28.dp)
+                    IconButton(
+                        onClick = onToggleNightMode,
+                        modifier = Modifier.size(48.dp).testTag("night_mode_toggle_btn")
+                    ) {
+                        Icon(
+                            imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                            contentDescription = "Toggle Night/Light Mode",
+                            tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    SettingsMoreMenu(
+                        onTriggerTheme = onTriggerTheme,
+                        onTriggerSleepTimer = onTriggerSleepTimer,
+                        onTriggerEqualizer = onTriggerEqualizer,
+                        tint = warmCream
                     )
                 }
             }
@@ -887,7 +930,9 @@ fun LibraryScreen(
     isPlaying: Boolean = false,
     modifier: Modifier = Modifier,
     onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> },
-    onTriggerEqualizer: () -> Unit = {}
+    onTriggerEqualizer: () -> Unit = {},
+    onTriggerTheme: () -> Unit = {},
+    onTriggerSleepTimer: () -> Unit = {}
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val deepEspresso = appColors.deepEspresso
@@ -1240,17 +1285,6 @@ fun LibraryScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     IconButton(
-                        onClick = onTriggerEqualizer,
-                        modifier = Modifier.size(48.dp).testTag("equalizer_button_library")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = "Trigger Sound Equalizer",
-                            tint = warmCream,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    IconButton(
                         onClick = onToggleNightMode,
                         modifier = Modifier.size(48.dp).testTag("night_mode_toggle_library")
                     ) {
@@ -1261,6 +1295,12 @@ fun LibraryScreen(
                             modifier = Modifier.size(28.dp)
                         )
                     }
+                    SettingsMoreMenu(
+                        onTriggerTheme = onTriggerTheme,
+                        onTriggerSleepTimer = onTriggerSleepTimer,
+                        onTriggerEqualizer = onTriggerEqualizer,
+                        tint = warmCream
+                    )
                 }
             }
 
@@ -1690,7 +1730,10 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     playlists: List<PlaylistEntity> = emptyList(),
     onAddSongsToPlaylist: (List<SongEntity>, PlaylistEntity) -> Unit = { _, _ -> },
-    onCreatePlaylistRequest: () -> Unit = {}
+    onCreatePlaylistRequest: () -> Unit = {},
+    onTriggerEqualizer: () -> Unit = {},
+    onTriggerTheme: () -> Unit = {},
+    onTriggerSleepTimer: () -> Unit = {}
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val darkMocha = appColors.darkMocha
@@ -1727,19 +1770,25 @@ fun SearchScreen(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(
+                    onClick = onToggleNightMode,
+                    modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
                 ) {
-                    IconButton(
-                        onClick = onToggleNightMode,
-                        modifier = Modifier.size(48.dp).testTag("night_mode_toggle_search")
-                    ) {
-                        Icon(
-                            imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                            contentDescription = "Toggle Night/Light Mode",
-                            tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = if (isNightMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = "Toggle Night/Light Mode",
+                        tint = if (isNightMode) coffeeBrown else Color(0xFFFF9F1C),
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
+                SettingsMoreMenu(
+                    onTriggerTheme = onTriggerTheme,
+                    onTriggerSleepTimer = onTriggerSleepTimer,
+                    onTriggerEqualizer = onTriggerEqualizer,
+                    tint = warmCream
+                )
+            }
         }
 
         // Custom search text field
@@ -2204,6 +2253,7 @@ fun MiniFloatingPlayer(
 // ==========================================
 // SCREEN: FULL PLAYER DETAIL OVERLAY
 // ==========================================
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FullPlayerScreen(
     song: SongEntity,
@@ -2242,6 +2292,20 @@ fun FullPlayerScreen(
 
     var isDragging by remember { mutableStateOf(false) }
     var dragOffsetY by remember { mutableStateOf(0f) }
+    val rawDragY = remember { FloatArray(1) { 0f } }
+
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            while (true) {
+                withFrameMillis {
+                    dragOffsetY = rawDragY[0]
+                }
+            }
+        } else {
+            rawDragY[0] = 0f
+            dragOffsetY = 0f
+        }
+    }
 
     val displayOffset by animateFloatAsState(
         targetValue = if (isDragging) dragOffsetY else 0f,
@@ -2309,68 +2373,68 @@ fun FullPlayerScreen(
         }
     }
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .offset { IntOffset(0, displayOffset.coerceAtLeast(0f).toInt()) }
-            .background(deepEspresso)
-            .pointerInput(onMinimize) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        var accumulatedDragY = 0f
-                        var isVerticalDrag = false
-                        val activePointerId = down.id
-                        var lastY = down.position.y
-                        var lastX = down.position.x
-
+    CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(onMinimize) {
+                    awaitPointerEventScope {
                         while (true) {
-                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull { it.id == activePointerId } ?: break
-                            if (!change.pressed) break
+                            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            var accumulatedDragY = 0f
+                            var isVerticalDrag = false
+                            val activePointerId = down.id
+                            var lastY = down.position.y
+                            var lastX = down.position.x
 
-                            val currentY = change.position.y
-                            val currentX = change.position.x
-                            val diffY = currentY - lastY
-                            val diffX = currentX - lastX
+                            while (true) {
+                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull { it.id == activePointerId } ?: break
+                                if (!change.pressed) break
 
-                            if (!isVerticalDrag) {
-                                accumulatedDragY += diffY
-                                val accumulatedDragX = currentX - down.position.x
-                                val touchSlop = 15f
-                                if (Math.abs(accumulatedDragY) > touchSlop && Math.abs(accumulatedDragY) > Math.abs(accumulatedDragX)) {
-                                    if (accumulatedDragY > 0) {
-                                        isVerticalDrag = true
-                                        isDragging = true
-                                        dragOffsetY = accumulatedDragY
+                                val currentY = change.position.y
+                                val currentX = change.position.x
+                                val diffY = currentY - lastY
+                                val diffX = currentX - lastX
+
+                                if (!isVerticalDrag) {
+                                    accumulatedDragY += diffY
+                                    val accumulatedDragX = currentX - down.position.x
+                                    val touchSlop = 15f
+                                    if (Math.abs(accumulatedDragY) > touchSlop && Math.abs(accumulatedDragY) > Math.abs(accumulatedDragX)) {
+                                        if (accumulatedDragY > 0) {
+                                            isVerticalDrag = true
+                                            isDragging = true
+                                            rawDragY[0] = accumulatedDragY
+                                        }
                                     }
+                                } else {
+                                    rawDragY[0] = (rawDragY[0] + diffY).coerceAtLeast(-50f)
+                                    change.consume()
                                 }
-                            } else {
-                                dragOffsetY = (dragOffsetY + diffY).coerceAtLeast(-50f)
-                                change.consume()
+
+                                lastY = currentY
+                                lastX = currentX
                             }
 
-                            lastY = currentY
-                            lastX = currentX
-                        }
-
-                        if (isVerticalDrag) {
-                            isDragging = false
-                            if (dragOffsetY > 180f) {
-                                onMinimize()
+                            if (isVerticalDrag) {
+                                isDragging = false
+                                if (rawDragY[0] > 180f) {
+                                    onMinimize()
+                                }
                             }
-                            dragOffsetY = 0f
                         }
                     }
                 }
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                // Swallow all clicks/taps on the backdrop area to prevent fall-through
-            }
-    ) {
+                .offset { IntOffset(0, displayOffset.coerceAtLeast(0f).toInt()) }
+                .background(deepEspresso)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    // Swallow all clicks/taps on the backdrop area to prevent fall-through
+                }
+        ) {
         val isWide = maxWidth >= 600.dp
 
         // Dynamic Backdrop Glowing Blur based on ambient song themes
@@ -2993,6 +3057,7 @@ fun FullPlayerScreen(
         }
     }
 }
+}
 
 // ==========================================
 // DRAWER: ACTIVE QUEUE OVERLAY PANEL
@@ -3169,6 +3234,65 @@ fun EqualizerAnimation(
 }
 
 @Composable
+fun SettingsMoreMenu(
+    onTriggerTheme: () -> Unit,
+    onTriggerSleepTimer: () -> Unit,
+    onTriggerEqualizer: () -> Unit,
+    tint: Color = com.example.ui.theme.LocalAppColors.current.warmCream
+) {
+    val appColors = com.example.ui.theme.LocalAppColors.current
+    val darkMocha = appColors.darkMocha
+    val coffeeBrown = appColors.coffeeBrown
+    val warmCream = appColors.warmCream
+
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { menuExpanded = true },
+            modifier = Modifier.size(48.dp).coffeeFocusHighlight(CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "Show options menu",
+                tint = tint,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            modifier = Modifier.background(darkMocha)
+        ) {
+            DropdownMenuItem(
+                text = { Text("Theme", color = warmCream) },
+                leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null, tint = coffeeBrown) },
+                onClick = {
+                    menuExpanded = false
+                    onTriggerTheme()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Sleep Timer", color = warmCream) },
+                leadingIcon = { Icon(Icons.Default.Snooze, contentDescription = null, tint = coffeeBrown) },
+                onClick = {
+                    menuExpanded = false
+                    onTriggerSleepTimer()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Equalizer", color = warmCream) },
+                leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = coffeeBrown) },
+                onClick = {
+                    menuExpanded = false
+                    onTriggerEqualizer()
+                }
+            )
+        }
+    }
+}
+
+@Composable
 fun ThemeColorPickerDialog(
     currentThemeColorHex: String?,
     themeBrightness: Float,
@@ -3188,30 +3312,43 @@ fun ThemeColorPickerDialog(
         "#F4A460", "#6B8E23", "#556B2F", "#800000", "#1C1C1C"
     )
 
-    val surfaceColor = if (currentThemeColorHex != null) {
+    val targetBlack = Color(0xFF020105)
+    val targetWhite = Color(0xFFFAFAFC)
+
+    var baseColor = Color(0xFF151030)
+    if (currentThemeColorHex != null) {
         try {
-            val base = Color(android.graphics.Color.parseColor(currentThemeColorHex))
-            if (com.example.ui.theme.isColorDark(base)) {
-                com.example.ui.theme.blendColor(base, Color.White, 0.08f)
-            } else {
-                com.example.ui.theme.blendColor(base, Color.Black, 0.06f)
-            }
+            baseColor = Color(android.graphics.Color.parseColor(currentThemeColorHex))
         } catch (e: Exception) {
-            Color(0xFF090615)
+            e.printStackTrace()
         }
-    } else {
-        Color(0xFF090615)
     }
 
-    val textColor = if (currentThemeColorHex != null) {
-        try {
-            val base = Color(android.graphics.Color.parseColor(currentThemeColorHex))
-            if (com.example.ui.theme.isColorDark(base)) Color(0xFFCAC5D6) else Color(0xFF140D2B)
-        } catch (e: Exception) {
-            Color(0xFFCAC5D6)
-        }
+    val isBaseDark = com.example.ui.theme.isColorDark(baseColor)
+    val finalBgColor = if (isBaseDark) {
+        com.example.ui.theme.blendColor(baseColor, targetBlack, 1f - themeBrightness)
     } else {
-        Color(0xFFCAC5D6)
+        com.example.ui.theme.blendColor(baseColor, targetWhite, 1f - themeBrightness)
+    }
+
+    val isBgDark = com.example.ui.theme.isColorDark(finalBgColor)
+
+    val surfaceColor = if (isBgDark) {
+        com.example.ui.theme.blendColor(finalBgColor, Color.White, 0.08f * themeBrightness + 0.02f)
+    } else {
+        com.example.ui.theme.blendColor(finalBgColor, Color.Black, 0.06f * themeBrightness + 0.02f)
+    }
+
+    val textColor = if (isBgDark) {
+        com.example.ui.theme.blendColor(Color(0xFFE8E5EE), Color(0xFF807A8A), 1f - themeBrightness)
+    } else {
+        com.example.ui.theme.blendColor(Color(0xFF140D2B), Color(0xFF7E7A8A), 1f - themeBrightness)
+    }
+
+    val primaryColor = if (isBgDark) {
+        com.example.ui.theme.blendColor(Color(0xFF6B4EE0), targetBlack, 0.45f * (1f - themeBrightness))
+    } else {
+        com.example.ui.theme.blendColor(Color(0xFF6B4EE0), targetWhite, 0.4f * (1f - themeBrightness))
     }
 
     Dialog(
@@ -3327,9 +3464,9 @@ fun ThemeColorPickerDialog(
                         onValueChange = onBrightnessChanged,
                         valueRange = 0.1f..1.0f,
                         colors = SliderDefaults.colors(
-                            activeTrackColor = Color(0xFF6B4EE0),
-                            inactiveTrackColor = Color(0xFF6B4EE0).copy(alpha = 0.24f),
-                            thumbColor = Color(0xFF6B4EE0)
+                            activeTrackColor = primaryColor,
+                            inactiveTrackColor = primaryColor.copy(alpha = 0.24f),
+                            thumbColor = primaryColor
                         ),
                         enabled = true,
                         modifier = Modifier
@@ -3345,12 +3482,12 @@ fun ThemeColorPickerDialog(
                             onDismissRequest()
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6B4EE0)
+                            containerColor = primaryColor
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(text = "Reset to Default Theme", color = Color.White)
+                        Text(text = "Reset to Default Theme", color = if (com.example.ui.theme.isColorDark(primaryColor)) Color.White else Color.Black)
                     }
                 }
             }

@@ -20,7 +20,7 @@ class ProceduralAudioSynthesizer {
     private var rainFilterPrev = 0.0f
     
     @Synchronized
-    fun start(preset: String) {
+    fun start(context: android.content.Context, preset: String) {
         try {
             stop()
             currentPreset = preset
@@ -35,7 +35,7 @@ class ProceduralAudioSynthesizer {
                 minBufferSize = 4096 // Safe default fallback
             }
             
-            audioTrack = AudioTrack.Builder()
+            val builder = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -51,7 +51,12 @@ class ProceduralAudioSynthesizer {
                 )
                 .setBufferSizeInBytes(minBufferSize * 2)
                 .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
+                
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                builder.setContext(context)
+            }
+            
+            audioTrack = builder.build()
                 
             audioTrack?.play()
             

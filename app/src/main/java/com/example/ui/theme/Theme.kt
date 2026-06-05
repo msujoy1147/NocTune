@@ -16,7 +16,8 @@ data class AppColors(
     val softLatte: Color,
     val warmCream: Color,
     val secondaryText: Color,
-    val isNight: Boolean
+    val isNight: Boolean,
+    val themeBrightness: Float
 )
 
 val LocalAppColors = staticCompositionLocalOf {
@@ -27,7 +28,8 @@ val LocalAppColors = staticCompositionLocalOf {
         softLatte = Color(0xFF9079EC),
         warmCream = Color(0xFFCAC5D6),
         secondaryText = Color(0xFF676176),
-        isNight = true
+        isNight = true,
+        themeBrightness = 0.6f
     )
 }
 
@@ -130,7 +132,8 @@ fun NocTuneTheme(
             softLatte = softLatteVal,
             warmCream = warmCreamVal,
             secondaryText = secondaryTextVal,
-            isNight = true
+            isNight = true,
+            themeBrightness = themeBrightness
         )
         
         colorScheme = DarkColorScheme.copy(
@@ -163,7 +166,8 @@ fun NocTuneTheme(
             softLatte = softLatteVal,
             warmCream = warmCreamVal,
             secondaryText = secondaryTextVal,
-            isNight = false
+            isNight = false,
+            themeBrightness = themeBrightness
         )
         
         colorScheme = LightColorScheme.copy(

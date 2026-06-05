@@ -42,6 +42,9 @@ interface SongDao {
     @Query("DELETE FROM songs WHERE isGenerative = 0")
     suspend fun deleteScannedSongs()
 
+    @Query("DELETE FROM songs")
+    suspend fun deleteAllSongs()
+
     // Playlist queries
     @Query("SELECT * FROM playlists ORDER BY name ASC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
