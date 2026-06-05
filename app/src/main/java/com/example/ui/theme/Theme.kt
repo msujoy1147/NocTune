@@ -61,32 +61,124 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = Color(0xFF6E6E73)
 )
 
+fun isColorDark(color: Color): Boolean {
+    val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
+    return luminance < 0.5f
+}
+
+fun blendColor(color1: Color, color2: Color, ratio: Float): Color {
+    return Color(
+        red = color1.red * (1 - ratio) + color2.red * ratio,
+        green = color1.green * (1 - ratio) + color2.green * ratio,
+        blue = color1.blue * (1 - ratio) + color2.blue * ratio,
+        alpha = color1.alpha * (1 - ratio) + color2.alpha * ratio
+    )
+}
+
 @Composable
 fun NocTuneTheme(
     darkTheme: Boolean = true, // Force dark luxury lounge theme by default for premium feel
+    themeColorHex: String? = null,
+    themeBrightness: Float = 0.6f,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val targetBlack = Color(0xFF020105)
+    val targetWhite = Color(0xFFFAFAFC)
+    val finalBgColor: Color
 
-    val appColors = if (darkTheme) {
-        AppColors(
-            deepEspresso = DeepEspresso,
-            darkMocha = DarkMocha,
-            coffeeBrown = CoffeeBrown,
-            softLatte = SoftLatte,
-            warmCream = WarmCream,
-            secondaryText = SecondaryText,
+    if (themeColorHex != null) {
+        var baseBg = Color(0xFF151030)
+        try {
+            baseBg = Color(android.graphics.Color.parseColor(themeColorHex))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        val isBaseDark = isColorDark(baseBg)
+        finalBgColor = if (isBaseDark) {
+            blendColor(baseBg, targetBlack, 1f - themeBrightness)
+        } else {
+            blendColor(baseBg, targetWhite, 1f - themeBrightness)
+        }
+    } else {
+        // Dynamic brightness scaling for the default luxury night theme
+        val defaultBaseBg = if (darkTheme) Color(0xFF151030) else Color(0xFFFFFFFF)
+        finalBgColor = if (darkTheme) {
+            blendColor(defaultBaseBg, targetBlack, 1f - themeBrightness)
+        } else {
+            blendColor(defaultBaseBg, targetWhite, 1f - themeBrightness)
+        }
+    }
+
+    val isBgDark = isColorDark(finalBgColor)
+    val appColors: AppColors
+    val colorScheme: androidx.compose.material3.ColorScheme
+
+    if (isBgDark) {
+        val deepEspressoVal = finalBgColor
+        val darkMochaVal = blendColor(finalBgColor, Color.White, 0.08f * themeBrightness + 0.02f)
+        
+        // Scale action components and typography
+        val coffeeBrownVal = blendColor(CoffeeBrown, targetBlack, 0.45f * (1f - themeBrightness))
+        val softLatteVal = blendColor(SoftLatte, targetBlack, 0.45f * (1f - themeBrightness))
+        val warmCreamVal = blendColor(Color(0xFFE8E5EE), Color(0xFF807A8A), 1f - themeBrightness)
+        val secondaryTextVal = blendColor(Color(0xFFCAC5D6), Color(0xFF4C4656), 1f - themeBrightness)
+
+        appColors = AppColors(
+            deepEspresso = deepEspressoVal,
+            darkMocha = darkMochaVal,
+            coffeeBrown = coffeeBrownVal,
+            softLatte = softLatteVal,
+            warmCream = warmCreamVal,
+            secondaryText = secondaryTextVal,
             isNight = true
         )
+        
+        colorScheme = DarkColorScheme.copy(
+            primary = coffeeBrownVal,
+            secondary = softLatteVal,
+            tertiary = warmCreamVal,
+            background = deepEspressoVal,
+            surface = darkMochaVal,
+            onPrimary = warmCreamVal,
+            onSecondary = deepEspressoVal,
+            onTertiary = deepEspressoVal,
+            onBackground = warmCreamVal,
+            onSurface = warmCreamVal,
+            surfaceVariant = darkMochaVal,
+            onSurfaceVariant = secondaryTextVal
+        )
     } else {
-        AppColors(
-            deepEspresso = Color(0xFFFFFFFF), // Pure white background in Light Mode
-            darkMocha = Color(0xFFF4F3F8),    // Cool, light grey-purple surface for cards
-            coffeeBrown = CoffeeBrown,
-            softLatte = SoftLatte,
-            warmCream = Color(0xFF140D2B),    // Deep rich dark purple for high readability primary text
-            secondaryText = Color(0xFF6E6E73), // Professional contrast secondary grey text
+        val deepEspressoVal = finalBgColor
+        val darkMochaVal = blendColor(finalBgColor, Color.Black, 0.06f * themeBrightness + 0.02f)
+        
+        val coffeeBrownVal = blendColor(CoffeeBrown, targetWhite, 0.4f * (1f - themeBrightness))
+        val softLatteVal = blendColor(SoftLatte, targetWhite, 0.4f * (1f - themeBrightness))
+        val warmCreamVal = blendColor(Color(0xFF140D2B), Color(0xFF7E7A8A), 1f - themeBrightness)
+        val secondaryTextVal = blendColor(Color(0xFF6E6E73), Color(0xFF9FA0A5), 1f - themeBrightness)
+
+        appColors = AppColors(
+            deepEspresso = deepEspressoVal,
+            darkMocha = darkMochaVal,
+            coffeeBrown = coffeeBrownVal,
+            softLatte = softLatteVal,
+            warmCream = warmCreamVal,
+            secondaryText = secondaryTextVal,
             isNight = false
+        )
+        
+        colorScheme = LightColorScheme.copy(
+            primary = coffeeBrownVal,
+            secondary = softLatteVal,
+            tertiary = warmCreamVal,
+            background = deepEspressoVal,
+            surface = darkMochaVal,
+            onPrimary = Color.White,
+            onSecondary = Color.White,
+            onTertiary = deepEspressoVal,
+            onBackground = warmCreamVal,
+            onSurface = warmCreamVal,
+            surfaceVariant = darkMochaVal,
+            onSurfaceVariant = secondaryTextVal
         )
     }
 

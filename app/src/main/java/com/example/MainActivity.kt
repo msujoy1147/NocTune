@@ -56,7 +56,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.PlaylistEntity
 import com.example.data.model.SongEntity
@@ -84,8 +90,10 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("app_prefs", MODE_PRIVATE) }
             var isNightMode by remember { mutableStateOf(prefs.getBoolean("is_night_mode", true)) }
+            var themeColorHex by remember { mutableStateOf(prefs.getString("theme_color_hex", null)) }
+            var themeBrightness by remember { mutableStateOf(prefs.getFloat("theme_brightness", 0.6f)) }
 
-            NocTuneTheme(darkTheme = isNightMode) {
+            NocTuneTheme(darkTheme = isNightMode, themeColorHex = themeColorHex, themeBrightness = themeBrightness) {
                 MainAppScreen(
                     viewModel = viewModel,
                     isNightMode = isNightMode,
@@ -93,6 +101,20 @@ class MainActivity : ComponentActivity() {
                         val nextMode = !isNightMode
                         isNightMode = nextMode
                         prefs.edit().putBoolean("is_night_mode", nextMode).apply()
+                    },
+                    themeColorHex = themeColorHex,
+                    onChangeThemeColor = { newColorHex ->
+                        themeColorHex = newColorHex
+                        if (newColorHex == null) {
+                            prefs.edit().remove("theme_color_hex").apply()
+                        } else {
+                            prefs.edit().putString("theme_color_hex", newColorHex).apply()
+                        }
+                    },
+                    themeBrightness = themeBrightness,
+                    onChangeThemeBrightness = { newBrightness ->
+                        themeBrightness = newBrightness
+                        prefs.edit().putFloat("theme_brightness", newBrightness).apply()
                     }
                 )
             }
@@ -104,7 +126,11 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(
     viewModel: PlayerViewModel,
     isNightMode: Boolean,
-    onToggleNightMode: () -> Unit
+    onToggleNightMode: () -> Unit,
+    themeColorHex: String?,
+    onChangeThemeColor: (String?) -> Unit,
+    themeBrightness: Float = 0.6f,
+    onChangeThemeBrightness: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
     
@@ -387,7 +413,12 @@ fun MainAppScreen(
                                 onToggleRepeat = { viewModel.toggleRepeat() },
                                 onToggleFavorite = { viewModel.toggleFavorite() },
                                 onTriggerSleepTimerMenu = { showSleepTimerMenu = true },
-                                onTriggerQueueDrawer = { showQueueDrawer = true }
+                                onTriggerQueueDrawer = { showQueueDrawer = true },
+                                themeColorHex = themeColorHex,
+                                onChangeThemeColor = onChangeThemeColor,
+                                themeBrightness = themeBrightness,
+                                onChangeThemeBrightness = onChangeThemeBrightness,
+                                onTriggerEqualizer = { showEqualizerPanel = true }
                             )
                         }
                     }
@@ -605,7 +636,12 @@ fun MainAppScreen(
                                     onToggleRepeat = { viewModel.toggleRepeat() },
                                     onToggleFavorite = { viewModel.toggleFavorite() },
                                     onTriggerSleepTimerMenu = { showSleepTimerMenu = true },
-                                    onTriggerQueueDrawer = { showQueueDrawer = true }
+                                    onTriggerQueueDrawer = { showQueueDrawer = true },
+                                    themeColorHex = themeColorHex,
+                                    onChangeThemeColor = onChangeThemeColor,
+                                    themeBrightness = themeBrightness,
+                                    onChangeThemeBrightness = onChangeThemeBrightness,
+                                    onTriggerEqualizer = { showEqualizerPanel = true }
                                 )
                             }
                         }
@@ -2186,7 +2222,12 @@ fun FullPlayerScreen(
     onToggleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
     onTriggerSleepTimerMenu: () -> Unit,
-    onTriggerQueueDrawer: () -> Unit
+    onTriggerQueueDrawer: () -> Unit,
+    themeColorHex: String? = null,
+    onChangeThemeColor: (String?) -> Unit = {},
+    themeBrightness: Float = 0.6f,
+    onChangeThemeBrightness: (Float) -> Unit = {},
+    onTriggerEqualizer: () -> Unit = {}
 ) {
     val appColors = com.example.ui.theme.LocalAppColors.current
     val deepEspresso = appColors.deepEspresso
@@ -2197,10 +2238,43 @@ fun FullPlayerScreen(
     val secondaryText = appColors.secondaryText
 
     var showRemainingTime by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    var isDragging by remember { mutableStateOf(false) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+
+    val displayOffset by animateFloatAsState(
+        targetValue = if (isDragging) dragOffsetY else 0f,
+        animationSpec = if (isDragging) {
+            snap()
+        } else {
+            spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        },
+        label = "dragOffset"
+    )
+
+    if (showThemeDialog) {
+        ThemeColorPickerDialog(
+            currentThemeColorHex = themeColorHex,
+            themeBrightness = themeBrightness,
+            onBrightnessChanged = onChangeThemeBrightness,
+            onColorSelected = onChangeThemeColor,
+            onDismissRequest = { showThemeDialog = false }
+        )
+    }
+
+    // Dynamic scrubbing position state (0.0f..1.0f)
+    var localScrubbingProgress by remember { mutableStateOf<Float?>(null) }
+
+    val liveProgressMs = if (localScrubbingProgress != null) {
+        (localScrubbingProgress!! * song.duration).toLong().coerceIn(0L, song.duration)
+    } else {
+        progress
+    }
 
     // Formatted timelines
-    val currentFormatted = remember(progress) {
-        val totalSeconds = progress / 1000
+    val currentFormatted = remember(liveProgressMs) {
+        val totalSeconds = liveProgressMs / 1000
         val hours = totalSeconds / 3600
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
@@ -2210,9 +2284,9 @@ fun FullPlayerScreen(
             String.format("%02d:%02d", minutes, seconds)
         }
     }
-    val durationFormatted = remember(progress, song.duration, showRemainingTime) {
+    val durationFormatted = remember(liveProgressMs, song.duration, showRemainingTime) {
         if (showRemainingTime) {
-            val remainMs = maxOf(0L, song.duration - progress)
+            val remainMs = maxOf(0L, song.duration - liveProgressMs)
             val totalSeconds = remainMs / 1000
             val hours = totalSeconds / 3600
             val minutes = (totalSeconds % 3600) / 60
@@ -2238,7 +2312,58 @@ fun FullPlayerScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
+            .offset { IntOffset(0, displayOffset.coerceAtLeast(0f).toInt()) }
             .background(deepEspresso)
+            .pointerInput(onMinimize) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var accumulatedDragY = 0f
+                        var isVerticalDrag = false
+                        val activePointerId = down.id
+                        var lastY = down.position.y
+                        var lastX = down.position.x
+
+                        while (true) {
+                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == activePointerId } ?: break
+                            if (!change.pressed) break
+
+                            val currentY = change.position.y
+                            val currentX = change.position.x
+                            val diffY = currentY - lastY
+                            val diffX = currentX - lastX
+
+                            if (!isVerticalDrag) {
+                                accumulatedDragY += diffY
+                                val accumulatedDragX = currentX - down.position.x
+                                val touchSlop = 15f
+                                if (Math.abs(accumulatedDragY) > touchSlop && Math.abs(accumulatedDragY) > Math.abs(accumulatedDragX)) {
+                                    if (accumulatedDragY > 0) {
+                                        isVerticalDrag = true
+                                        isDragging = true
+                                        dragOffsetY = accumulatedDragY
+                                    }
+                                }
+                            } else {
+                                dragOffsetY = (dragOffsetY + diffY).coerceAtLeast(-50f)
+                                change.consume()
+                            }
+
+                            lastY = currentY
+                            lastX = currentX
+                        }
+
+                        if (isVerticalDrag) {
+                            isDragging = false
+                            if (dragOffsetY > 180f) {
+                                onMinimize()
+                            }
+                            dragOffsetY = 0f
+                        }
+                    }
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -2350,16 +2475,45 @@ fun FullPlayerScreen(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Row {
-                            IconButton(onClick = onTriggerSleepTimerMenu, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                                Icon(
-                                    imageVector = Icons.Default.Snooze,
-                                    contentDescription = "Configure sleep countdown trigger",
-                                    tint = if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) coffeeBrown else warmCream
-                                )
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = onTriggerQueueDrawer, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
                                 Icon(Icons.Default.QueueMusic, contentDescription = "Toggle playing queue drawer", tint = warmCream)
+                            }
+                            Box {
+                                var menuExpanded by remember { mutableStateOf(false) }
+                                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "Show options menu", tint = warmCream)
+                                }
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false },
+                                    modifier = Modifier.background(darkMocha)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Theme", color = warmCream) },
+                                        leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null, tint = coffeeBrown) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            showThemeDialog = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Sleep Timer", color = warmCream) },
+                                        leadingIcon = { Icon(Icons.Default.Snooze, contentDescription = null, tint = coffeeBrown) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onTriggerSleepTimerMenu()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Equalizer", color = warmCream) },
+                                        leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = coffeeBrown) },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onTriggerEqualizer()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -2388,10 +2542,17 @@ fun FullPlayerScreen(
 
                     // Progress Slider
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        val sliderValue = localScrubbingProgress ?: if (song.duration > 0) progress.toFloat() / song.duration else 0f
                         Slider(
-                            value = if (song.duration > 0) progress.toFloat() / song.duration else 0f,
+                            value = sliderValue.coerceIn(0f, 1f),
                             onValueChange = { percent ->
-                                onSeek((percent * song.duration).toLong())
+                                localScrubbingProgress = percent
+                            },
+                            onValueChangeFinished = {
+                                localScrubbingProgress?.let { percent ->
+                                    onSeek((percent * song.duration).toLong())
+                                }
+                                localScrubbingProgress = null
                             },
                             colors = SliderDefaults.colors(
                                 thumbColor = coffeeBrown,
@@ -2549,7 +2710,7 @@ fun FullPlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 16.dp),
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2564,19 +2725,45 @@ fun FullPlayerScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    Row {
-                        // Sleep lock badge decoration
-                        Box(modifier = Modifier.wrapContentSize(), contentAlignment = Alignment.Center) {
-                            IconButton(onClick = onTriggerSleepTimerMenu, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
-                                Icon(
-                                    imageVector = Icons.Default.Snooze,
-                                    contentDescription = "Configure sleep countdown trigger",
-                                    tint = if (sleepTimerRemainingMs > 0 || stopAfterCurrentEnabled) coffeeBrown else warmCream
-                                )
-                            }
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onTriggerQueueDrawer, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
                             Icon(Icons.Default.QueueMusic, contentDescription = "Toggle playing queue drawer", tint = warmCream)
+                        }
+                        Box {
+                            var menuExpanded by remember { mutableStateOf(false) }
+                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.minimumInteractiveComponentSize().coffeeFocusHighlight(CircleShape)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Show options menu", tint = warmCream)
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                modifier = Modifier.background(darkMocha)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Theme", color = warmCream) },
+                                    leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null, tint = coffeeBrown) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        showThemeDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sleep Timer", color = warmCream) },
+                                    leadingIcon = { Icon(Icons.Default.Snooze, contentDescription = null, tint = coffeeBrown) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onTriggerSleepTimerMenu()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Equalizer", color = warmCream) },
+                                    leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = coffeeBrown) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onTriggerEqualizer()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -2648,10 +2835,17 @@ fun FullPlayerScreen(
 
                 // Timeline Progress Slider layout
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    val sliderValue = localScrubbingProgress ?: if (song.duration > 0) progress.toFloat() / song.duration else 0f
                     Slider(
-                        value = if (song.duration > 0) progress.toFloat() / song.duration else 0f,
+                        value = sliderValue.coerceIn(0f, 1f),
                         onValueChange = { percent ->
-                            onSeek((percent * song.duration).toLong())
+                            localScrubbingProgress = percent
+                        },
+                        onValueChangeFinished = {
+                            localScrubbingProgress?.let { percent ->
+                                onSeek((percent * song.duration).toLong())
+                            }
+                            localScrubbingProgress = null
                         },
                         colors = SliderDefaults.colors(
                             thumbColor = coffeeBrown,
@@ -2971,6 +3165,196 @@ fun EqualizerAnimation(
                 .size(barWidth, 14.dp * b3Height)
                 .background(color, RoundedCornerShape(1.dp))
         )
+    }
+}
+
+@Composable
+fun ThemeColorPickerDialog(
+    currentThemeColorHex: String?,
+    themeBrightness: Float,
+    onBrightnessChanged: (Float) -> Unit,
+    onColorSelected: (String?) -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    val presetColors = listOf(
+        "#1F4E5B", "#7E8B90", "#FF1616", "#FF3E35", "#B01D21",
+        "#FF5722", "#FF7043", "#FF9800", "#FFB300", "#FFD54F",
+        "#FF8A65", "#FFA726", "#FFC107", "#FFEE58", "#FFEB3B",
+        "#4CAF50", "#8BC34A", "#CDDC39", "#9CCC65", "#E91E63",
+        "#388E3C", "#2E7D32", "#81C784", "#558B2F", "#1B5E20",
+        "#4682B4", "#2196F3", "#00BCD4", "#009688", "#008080",
+        "#3B5998", "#5D3FD3", "#7F00FF", "#8A2BE2", "#9932CC",
+        "#8D6E63", "#EC407A", "#D81B60", "#4A148C", "#8236EB",
+        "#F4A460", "#6B8E23", "#556B2F", "#800000", "#1C1C1C"
+    )
+
+    val surfaceColor = if (currentThemeColorHex != null) {
+        try {
+            val base = Color(android.graphics.Color.parseColor(currentThemeColorHex))
+            if (com.example.ui.theme.isColorDark(base)) {
+                com.example.ui.theme.blendColor(base, Color.White, 0.08f)
+            } else {
+                com.example.ui.theme.blendColor(base, Color.Black, 0.06f)
+            }
+        } catch (e: Exception) {
+            Color(0xFF090615)
+        }
+    } else {
+        Color(0xFF090615)
+    }
+
+    val textColor = if (currentThemeColorHex != null) {
+        try {
+            val base = Color(android.graphics.Color.parseColor(currentThemeColorHex))
+            if (com.example.ui.theme.isColorDark(base)) Color(0xFFCAC5D6) else Color(0xFF140D2B)
+        } catch (e: Exception) {
+            Color(0xFFCAC5D6)
+        }
+    } else {
+        Color(0xFFCAC5D6)
+    }
+
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onDismissRequest() },
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight()
+                    .clickable(enabled = false) {}, // prevent click-through dismissal
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Select a Colour",
+                            color = textColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = onDismissRequest) {
+                            Icon(Icons.Default.Close, contentDescription = "Close dialog", tint = textColor)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // 5 Columns grid of circles
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 440.dp)
+                    ) {
+                        items(presetColors) { colorHex ->
+                            val parsedColor = remember(colorHex) {
+                                Color(android.graphics.Color.parseColor(colorHex))
+                            }
+                            val isSelected = currentThemeColorHex?.equals(colorHex, ignoreCase = true) == true
+                            
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(CircleShape)
+                                    .background(parsedColor)
+                                    .clickable {
+                                        onColorSelected(colorHex)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    val checkTint = if (com.example.ui.theme.isColorDark(parsedColor)) Color.White else Color.Black
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = checkTint,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "Brightness Icon",
+                            tint = textColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Theme Brightness: ${(themeBrightness * 100).toInt()}%",
+                            color = textColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    
+                    Slider(
+                        value = themeBrightness,
+                        onValueChange = onBrightnessChanged,
+                        valueRange = 0.1f..1.0f,
+                        colors = SliderDefaults.colors(
+                            activeTrackColor = Color(0xFF6B4EE0),
+                            inactiveTrackColor = Color(0xFF6B4EE0).copy(alpha = 0.24f),
+                            thumbColor = Color(0xFF6B4EE0)
+                        ),
+                        enabled = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    )
+                    
+                    // Reset button
+                    Button(
+                        onClick = {
+                            onColorSelected(null)
+                            onBrightnessChanged(0.6f)
+                            onDismissRequest()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF6B4EE0)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = "Reset to Default Theme", color = Color.White)
+                    }
+                }
+            }
+        }
     }
 }
 
