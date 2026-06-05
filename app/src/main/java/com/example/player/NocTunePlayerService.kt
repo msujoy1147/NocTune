@@ -10,6 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.data.model.SongEntity
@@ -19,6 +22,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NocTunePlayerService : Service() {
 
@@ -34,11 +39,43 @@ class NocTunePlayerService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isServiceInForeground = false
+    private var mediaSession: MediaSessionCompat? = null
+    private var currentExtractedMetadata: ExtractedMetadata? = null
 
     override fun onCreate() {
         super.onCreate()
         MusicPlayerManager.init(this)
         createNotificationChannel()
+
+        // Initialize MediaSessionCompat
+        mediaSession = MediaSessionCompat(this, "NocTuneMediaSession").apply {
+            isActive = true
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    MusicPlayerManager.resumePlayback()
+                }
+
+                override fun onPause() {
+                    MusicPlayerManager.pausePlayback()
+                }
+
+                override fun onSkipToNext() {
+                    MusicPlayerManager.nextSong()
+                }
+
+                override fun onSkipToPrevious() {
+                    MusicPlayerManager.prevSong()
+                }
+
+                override fun onStop() {
+                    MusicPlayerManager.stopPlayback()
+                }
+
+                override fun onSeekTo(pos: Long) {
+                    MusicPlayerManager.seekTo(pos)
+                }
+            })
+        }
         
         // Start foreground immediately in onCreate with initial notification to satisfy Android requirements
         try {
@@ -59,7 +96,24 @@ class NocTunePlayerService : Service() {
         
         // Listen to state changes to update the notification dynamically
         MusicPlayerManager.isPlaying.onEach { updateNotification() }.launchIn(serviceScope)
-        MusicPlayerManager.currentSong.onEach { updateNotification() }.launchIn(serviceScope)
+        
+        MusicPlayerManager.currentSong.onEach { song ->
+            if (song != null) {
+                serviceScope.launch {
+                    val extracted = withContext(Dispatchers.IO) {
+                        SongMetadataExtractor.extract(this@NocTunePlayerService, song)
+                    }
+                    currentExtractedMetadata = extracted
+                    updateNotification()
+                }
+            } else {
+                currentExtractedMetadata = null
+                updateNotification()
+            }
+        }.launchIn(serviceScope)
+        
+        // Lightweight MediaSession state syncing on position updates
+        MusicPlayerManager.currentPosition.onEach { updateMediaSessionStateOnly() }.launchIn(serviceScope)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,18 +128,13 @@ class NocTunePlayerService : Service() {
             ACTION_NEXT -> MusicPlayerManager.nextSong()
             ACTION_PREVIOUS -> MusicPlayerManager.prevSong()
             ACTION_STOP -> {
-                MusicPlayerManager.pausePlayback()
-                if (isServiceInForeground) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    isServiceInForeground = false
-                }
-                stopSelf()
+                MusicPlayerManager.stopPlayback()
                 return START_NOT_STICKY
             }
         }
         
         // Ensure starting foreground again safely if restarted
-        if (intent?.action != ACTION_STOP) {
+        if (intent?.action != ACTION_STOP && MusicPlayerManager.currentSong.value != null) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     startForeground(
@@ -109,6 +158,11 @@ class NocTunePlayerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
+        mediaSession?.apply {
+            isActive = false
+            release()
+        }
+        mediaSession = null
     }
 
     private fun createNotificationChannel() {
@@ -126,12 +180,54 @@ class NocTunePlayerService : Service() {
         }
     }
 
+    private fun updateMediaSessionStateOnly() {
+        val session = mediaSession ?: return
+        val isPlaying = MusicPlayerManager.isPlaying.value
+        val position = MusicPlayerManager.currentPosition.value
+        
+        val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        
+        val actions = PlaybackStateCompat.ACTION_PLAY or
+                PlaybackStateCompat.ACTION_PAUSE or
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_SEEK_TO or
+                PlaybackStateCompat.ACTION_STOP
+                
+        val playbackState = PlaybackStateCompat.Builder()
+            .setActions(actions)
+            .setState(state, position, if (isPlaying) 1.0f else 0.0f)
+            .build()
+            
+        session.setPlaybackState(playbackState)
+    }
+
+    private fun updateMediaSessionMetadata() {
+        val session = mediaSession ?: return
+        val song = MusicPlayerManager.currentSong.value ?: return
+        val extracted = currentExtractedMetadata
+        
+        val metadataBuilder = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, extracted?.title ?: song.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, extracted?.artist ?: song.artist)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, extracted?.album ?: song.album)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, extracted?.duration ?: song.duration)
+            
+        extracted?.artwork?.let {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+        }
+            
+        session.setMetadata(metadataBuilder.build())
+    }
+
     private fun buildNotification(): Notification {
         val song = MusicPlayerManager.currentSong.value
         val isPlaying = MusicPlayerManager.isPlaying.value
+        val extracted = currentExtractedMetadata
         
-        val title = song?.title ?: "No Song Loaded"
-        val artist = song?.artist ?: "Relax in the Noc Tune Espresso lounge"
+        val title = extracted?.title ?: song?.title ?: "No Song Loaded"
+        val artist = extracted?.artist ?: song?.artist ?: "Relax in the Noc Tune Espresso lounge"
         
         val mainIntent = Intent(this, MainActivity::class.java)
         val mainPendingIntent = PendingIntent.getActivity(
@@ -176,8 +272,13 @@ class NocTunePlayerService : Service() {
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
                     .setShowActionsInCompactView(0, 1, 2)
+                    .setMediaSession(mediaSession?.sessionToken)
             )
             .setColor(0xFF6B4EE0.toInt()) // Soothing Violet Accent Theme Colour for notification
+        
+        extracted?.artwork?.let {
+            builder.setLargeIcon(it)
+        }
         
         return builder.build()
     }
@@ -185,17 +286,45 @@ class NocTunePlayerService : Service() {
     private fun updateNotification() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val isPlaying = MusicPlayerManager.isPlaying.value
+        val song = MusicPlayerManager.currentSong.value
+
+        // Clear notification & stop service cleanly if no song is loaded
+        if (song == null) {
+            if (isServiceInForeground) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NocTunePlayerService", "Error stopping foreground on null song", e)
+                }
+                isServiceInForeground = false
+            } else {
+                manager.cancel(NOTIFICATION_ID)
+            }
+            stopSelf()
+            return
+        }
+
+        // Synchronize with active MediaSession
+        updateMediaSessionStateOnly()
+        updateMediaSessionMetadata()
         
+        val notification = buildNotification()
+
         if (isPlaying) {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     startForeground(
                         NOTIFICATION_ID,
-                        buildNotification(),
+                        notification,
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
                     )
                 } else {
-                    startForeground(NOTIFICATION_ID, buildNotification())
+                    startForeground(NOTIFICATION_ID, notification)
                 }
                 isServiceInForeground = true
             } catch (e: Exception) {
@@ -215,7 +344,7 @@ class NocTunePlayerService : Service() {
                     android.util.Log.e("NocTunePlayerService", "Failed to stopForeground in updateNotification", e)
                 }
             }
-            manager.notify(NOTIFICATION_ID, buildNotification())
+            manager.notify(NOTIFICATION_ID, notification)
         }
     }
 }
