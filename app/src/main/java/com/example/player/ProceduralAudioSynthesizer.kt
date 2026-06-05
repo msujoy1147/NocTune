@@ -56,12 +56,13 @@ class ProceduralAudioSynthesizer {
                 builder.setContext(context)
             }
             
-            audioTrack = builder.build()
+            val currentTrack = builder.build()
+            audioTrack = currentTrack
                 
-            audioTrack?.play()
+            currentTrack.play()
             
             synthThread = Thread {
-                renderLoop(minBufferSize)
+                renderLoop(minBufferSize, currentTrack)
             }.apply {
                 priority = Thread.NORM_PRIORITY
                 start()
@@ -122,7 +123,7 @@ class ProceduralAudioSynthesizer {
         }.start()
     }
 
-    private fun renderLoop(bufferSize: Int) {
+    private fun renderLoop(bufferSize: Int, localTrack: AudioTrack) {
         try {
             val random = Random()
             val numSamples = bufferSize / 2 // in frames (2 bytes per sample, stereo)
@@ -155,7 +156,7 @@ class ProceduralAudioSynthesizer {
             listOf(110.00f, 220.00f, 277.18f, 311.13f)
         )
 
-        while (isPlaying && synthThread == Thread.currentThread()) {
+        while (isPlaying && synthThread == Thread.currentThread() && localTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
             val secondsPerChord = 4.0f
             val samplesPerChord = (sampleRate * secondsPerChord).toLong()
             
@@ -294,7 +295,7 @@ class ProceduralAudioSynthesizer {
             
             // Write block to AudioTrack safely inside a try-catch to prevent crash if stopped/released from another thread
             val result = try {
-                audioTrack?.write(shortBuffer, 0, shortBuffer.size) ?: -1
+                localTrack.write(shortBuffer, 0, shortBuffer.size)
             } catch (e: Exception) {
                 Log.e("NocTuneSynth", "Error writing to AudioTrack", e)
                 -1

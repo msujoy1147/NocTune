@@ -279,7 +279,7 @@ object MusicPlayerManager {
         startForegroundService()
     }
 
-    fun nextSong() {
+    fun nextSong(forcePlay: Boolean = true) {
         val queue = _playbackQueue.value
         if (queue.isEmpty()) return
         
@@ -297,7 +297,7 @@ object MusicPlayerManager {
 
         currentIndex++
         if (currentIndex >= queue.size) {
-            if (_repeatMode.value == RepeatMode.ALL) {
+            if (_repeatMode.value == RepeatMode.ALL || forcePlay) {
                 currentIndex = 0
             } else {
                 currentIndex = queue.size - 1
@@ -311,7 +311,7 @@ object MusicPlayerManager {
         startPlayback()
     }
 
-    fun prevSong() {
+    fun prevSong(forcePlay: Boolean = true) {
         val queue = _playbackQueue.value
         if (queue.isEmpty()) return
         
@@ -323,7 +323,7 @@ object MusicPlayerManager {
 
         currentIndex--
         if (currentIndex < 0) {
-            if (_repeatMode.value == RepeatMode.ALL) {
+            if (_repeatMode.value == RepeatMode.ALL || forcePlay) {
                 currentIndex = queue.size - 1
             } else {
                 currentIndex = 0
@@ -419,7 +419,7 @@ object MusicPlayerManager {
     }
 
     private fun onSongCompleted() {
-        nextSong()
+        nextSong(forcePlay = false)
     }
 
     private fun stopAllPlayers() {

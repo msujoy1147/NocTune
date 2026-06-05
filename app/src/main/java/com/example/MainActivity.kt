@@ -884,10 +884,33 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp))
                         .background(darkMocha)
-                        .padding(24.dp),
+                        .padding(28.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = coffeeBrown)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = "No music available",
+                            tint = coffeeBrown,
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Text(
+                            text = "Music Library is Empty",
+                            color = warmCream,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Import local audio files or scan storage to enjoy your classic collection.",
+                            color = secondaryText,
+                            fontSize = 12.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                    }
                 }
             }
         }
