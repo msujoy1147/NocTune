@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -131,6 +132,11 @@ fun EqualizerPanel(
         reverbEnabled, surroundEnabled, loudnessEnabled, stereoMusicEnabled
     ) {
         saveToPrefs()
+        try {
+            com.example.player.AudioEffectsController.applyAllEffects(context)
+        } catch (e: Exception) {
+            Log.e("EqualizerPanel", "Error applying live effects", e)
+        }
     }
 
     // Helper to load presets
@@ -188,6 +194,7 @@ fun EqualizerPanel(
                         .statusBarsPadding()
                         .navigationBarsPadding()
                         .padding(horizontal = 20.dp)
+                        .padding(bottom = 56.dp) // Generous responsive padding to ensure everything is above the system navigation bar/pill
                 ) {
                     // Header Area
                     Row(
@@ -484,7 +491,6 @@ fun EqualizerPanel(
                         }
 
                         // Section 5: Reset Equalizer Action
-                        Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
                                 activePreset = "Normal"
@@ -728,16 +734,21 @@ fun PremiumVerticalSlider(
         modifier = modifier
             .height(totalHeightDp)
             .width(40.dp)
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    // DragAmount.y is positive downwards.
-                    // Map height delta into value range
-                    val totalHeightPx = size.height.toFloat()
-                    if (totalHeightPx > 0f) {
-                        val valueDelta = -(dragAmount.y / totalHeightPx) * (rangeMax - rangeMin)
-                        val targetValue = (value + valueDelta).coerceIn(rangeMin, rangeMax)
-                        onValueChange(targetValue)
+            .pointerInput(rangeMin, rangeMax) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: continue
+                        if (change.pressed || change.previousPressed) {
+                            change.consume()
+                            val totalHeightPx = size.height.toFloat()
+                            if (totalHeightPx > 0f) {
+                                val y = change.position.y
+                                val fraction = ((totalHeightPx - y) / totalHeightPx).coerceIn(0f, 1f)
+                                val targetValue = rangeMin + fraction * (rangeMax - rangeMin)
+                                onValueChange(targetValue)
+                            }
+                        }
                     }
                 }
             },

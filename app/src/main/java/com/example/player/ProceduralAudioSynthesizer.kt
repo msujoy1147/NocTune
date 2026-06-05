@@ -58,6 +58,11 @@ class ProceduralAudioSynthesizer {
             
             val currentTrack = builder.build()
             audioTrack = currentTrack
+            try {
+                AudioEffectsController.attachSession(context, currentTrack.audioSessionId)
+            } catch (e: Exception) {
+                Log.e("NocTuneSynth", "Error attaching audio effects to AudioTrack session", e)
+            }
                 
             currentTrack.play()
             

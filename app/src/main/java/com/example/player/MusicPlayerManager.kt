@@ -188,6 +188,11 @@ object MusicPlayerManager {
                 }
                 setDataSource(ctx, songUri)
                 prepare()
+                try {
+                    AudioEffectsController.attachSession(ctx, audioSessionId)
+                } catch (e: Exception) {
+                    Log.e("NocTunePlayer", "Error attaching equalizer to session", e)
+                }
                 if (_currentPosition.value > 0) {
                     seekTo(_currentPosition.value.toInt())
                 }
@@ -430,6 +435,11 @@ object MusicPlayerManager {
         }
         mediaPlayer = null
         generativeSynth.stop()
+        try {
+            AudioEffectsController.release()
+        } catch (e: Exception) {
+            Log.e("NocTunePlayer", "Error releasing AudioEffectsController", e)
+        }
     }
 
     private fun startProgressTracker() {
