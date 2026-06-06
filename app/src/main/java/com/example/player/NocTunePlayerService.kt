@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 class NocTunePlayerService : Service() {
 
@@ -41,6 +43,7 @@ class NocTunePlayerService : Service() {
     private var isServiceInForeground = false
     private var mediaSession: MediaSessionCompat? = null
     private var currentExtractedMetadata: ExtractedMetadata? = null
+    private var marqueeJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -203,13 +206,15 @@ class NocTunePlayerService : Service() {
         session.setPlaybackState(playbackState)
     }
 
-    private fun updateMediaSessionMetadata() {
+    private fun updateMediaSessionMetadata(scrolledTitle: String? = null) {
         val session = mediaSession ?: return
         val song = MusicPlayerManager.currentSong.value ?: return
         val extracted = currentExtractedMetadata
         
+        val titleText = scrolledTitle ?: extracted?.title ?: song.title
+        
         val metadataBuilder = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, extracted?.title ?: song.title)
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, titleText)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, extracted?.artist ?: song.artist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, extracted?.album ?: song.album)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, extracted?.duration ?: song.duration)
@@ -221,12 +226,12 @@ class NocTunePlayerService : Service() {
         session.setMetadata(metadataBuilder.build())
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(scrolledTitle: String? = null): Notification {
         val song = MusicPlayerManager.currentSong.value
         val isPlaying = MusicPlayerManager.isPlaying.value
         val extracted = currentExtractedMetadata
         
-        val title = extracted?.title ?: song?.title ?: "No Song Loaded"
+        val title = scrolledTitle ?: extracted?.title ?: song?.title ?: "No Song Loaded"
         val artist = extracted?.artist ?: song?.artist ?: "Relax in the Noc Tune Espresso lounge"
         
         val mainIntent = Intent(this, MainActivity::class.java)
@@ -290,6 +295,8 @@ class NocTunePlayerService : Service() {
 
         // Clear notification & stop service cleanly if no song is loaded
         if (song == null) {
+            marqueeJob?.cancel()
+            marqueeJob = null
             if (isServiceInForeground) {
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -309,7 +316,8 @@ class NocTunePlayerService : Service() {
             return
         }
 
-        // Synchronize with active MediaSession
+        marqueeJob?.cancel()
+        marqueeJob = null
         updateMediaSessionStateOnly()
         updateMediaSessionMetadata()
         
