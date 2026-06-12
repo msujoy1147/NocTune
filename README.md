@@ -1,3 +1,9 @@
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="[https://ai.google.dev/static/site-assets/images/share-ais-513315318.png](https://i.postimg.cc/HWS14tpR/Noctune-Logo.png)" />
+</div>
+
+
+
 # 🎵 Noctune – Less Noise. More Music.
 
 **Noctune** is a lightweight, modern, and distraction-free offline music player built exclusively for Android users who value simplicity, performance, and a beautiful listening experience.
