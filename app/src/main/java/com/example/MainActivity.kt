@@ -327,72 +327,81 @@ fun MainAppScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    // Tab router
-                    when (currentTab) {
-                        "home" -> HomeScreen(
-                            favoriteSongs = favoriteSongs,
-                            lastAdded = lastAdded,
-                            allSongsList = allSongs,
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            onPlaySong = { s -> viewModel.playSong(s, allSongs) },
-                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                            isNightMode = isNightMode,
-                            onToggleNightMode = onToggleNightMode,
-                            onTriggerTheme = { showGlobalThemeDialog = true },
-                            onTriggerSleepTimer = { showSleepTimerMenu = true },
-                            onTriggerEqualizer = { showEqualizerPanel = true },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        
-                        "library" -> LibraryScreen(
-                            songs = allSongs,
-                            playlists = playlists,
-                            isNightMode = isNightMode,
-                            onToggleNightMode = onToggleNightMode,
-                            selectedPlaylist = selectedPlaylist,
-                            songsInSelectedPlaylist = songsInSelectedPlaylist,
-                            activeSection = activeLibrarySection,
-                            onSectionChange = { activeLibrarySection = it },
-                            onPlaySong = { s, list -> viewModel.playSong(s, list) },
-                            onSelectPlaylist = { viewModel.selectPlaylist(it) },
-                            onCreatePlaylistRequest = { showCreatePlaylistInput = true },
-                            onDeletePlaylist = { viewModel.deletePlaylist(it) },
-                            onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
-                            onDeleteSong = { viewModel.deleteSong(it) },
-                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            modifier = Modifier.fillMaxSize(),
-                            onAddSongsToPlaylist = { songsList, playlist ->
-                                songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                            },
-                            onTriggerEqualizer = { showEqualizerPanel = true },
-                            onTriggerTheme = { showGlobalThemeDialog = true },
-                            onTriggerSleepTimer = { showSleepTimerMenu = true }
-                        )
-                        
-                        "search" -> SearchScreen(
-                            songs = filteredSongs,
-                            query = searchQuery,
-                            isNightMode = isNightMode,
-                            onToggleNightMode = onToggleNightMode,
-                            onQueryChange = { viewModel.updateSearchQuery(it) },
-                            onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
-                            onDeleteSong = { viewModel.deleteSong(it) },
-                            onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            modifier = Modifier.fillMaxSize(),
-                            playlists = playlists,
-                            onAddSongsToPlaylist = { songsList, playlist ->
-                                songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                            },
-                            onCreatePlaylistRequest = { showCreatePlaylistInput = true },
-                            onTriggerTheme = { showGlobalThemeDialog = true },
-                            onTriggerSleepTimer = { showSleepTimerMenu = true },
-                            onTriggerEqualizer = { showEqualizerPanel = true }
-                        )
+                    // Tab router with smooth, responsive fade transitions to eliminate harsh flashing
+                    AnimatedContent(
+                        targetState = currentTab,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(300, easing = LinearOutSlowInEasing)) togetherWith
+                                    fadeOut(animationSpec = tween(250, easing = LinearOutSlowInEasing))
+                        },
+                        label = "TabRouterPhone"
+                    ) { targetTab ->
+                        when (targetTab) {
+                            "home" -> HomeScreen(
+                                favoriteSongs = favoriteSongs,
+                                lastAdded = lastAdded,
+                                allSongsList = allSongs,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                onPlaySong = { s -> viewModel.playSong(s, allSongs) },
+                                onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                isNightMode = isNightMode,
+                                onToggleNightMode = onToggleNightMode,
+                                onTriggerTheme = { showGlobalThemeDialog = true },
+                                onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                onTriggerEqualizer = { showEqualizerPanel = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            
+                            "library" -> LibraryScreen(
+                                songs = allSongs,
+                                playlists = playlists,
+                                isNightMode = isNightMode,
+                                onToggleNightMode = onToggleNightMode,
+                                selectedPlaylist = selectedPlaylist,
+                                songsInSelectedPlaylist = songsInSelectedPlaylist,
+                                activeSection = activeLibrarySection,
+                                onSectionChange = { activeLibrarySection = it },
+                                onPlaySong = { s, list -> viewModel.playSong(s, list) },
+                                onSelectPlaylist = { viewModel.selectPlaylist(it) },
+                                onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                onDeletePlaylist = { viewModel.deletePlaylist(it) },
+                                onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                                onDeleteSong = { viewModel.deleteSong(it) },
+                                onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                modifier = Modifier.fillMaxSize(),
+                                onAddSongsToPlaylist = { songsList, playlist ->
+                                    songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                },
+                                onTriggerEqualizer = { showEqualizerPanel = true },
+                                onTriggerTheme = { showGlobalThemeDialog = true },
+                                onTriggerSleepTimer = { showSleepTimerMenu = true }
+                            )
+                            
+                            "search" -> SearchScreen(
+                                songs = filteredSongs,
+                                query = searchQuery,
+                                isNightMode = isNightMode,
+                                onToggleNightMode = onToggleNightMode,
+                                onQueryChange = { viewModel.updateSearchQuery(it) },
+                                onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                                onDeleteSong = { viewModel.deleteSong(it) },
+                                onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                modifier = Modifier.fillMaxSize(),
+                                playlists = playlists,
+                                onAddSongsToPlaylist = { songsList, playlist ->
+                                    songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                },
+                                onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                onTriggerTheme = { showGlobalThemeDialog = true },
+                                onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                onTriggerEqualizer = { showEqualizerPanel = true }
+                            )
+                        }
                     }
 
                     // Full Expanded Immersive Player Screen (slides up)
@@ -558,71 +567,81 @@ fun MainAppScreen(
                                 .widthIn(max = 1000.dp)
                                 .align(Alignment.Center)
                         ) {
-                            when (currentTab) {
-                                "home" -> HomeScreen(
-                                    favoriteSongs = favoriteSongs,
-                                    lastAdded = lastAdded,
-                                    allSongsList = allSongs,
-                                    currentSong = currentSong,
-                                    isPlaying = isPlaying,
-                                    onPlaySong = { s -> viewModel.playSong(s, allSongs) },
-                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                                    isNightMode = isNightMode,
-                                    onToggleNightMode = onToggleNightMode,
-                                    onTriggerTheme = { showGlobalThemeDialog = true },
-                                    onTriggerSleepTimer = { showSleepTimerMenu = true },
-                                    onTriggerEqualizer = { showEqualizerPanel = true },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                
-                                "library" -> LibraryScreen(
-                                    songs = allSongs,
-                                    playlists = playlists,
-                                    isNightMode = isNightMode,
-                                    onToggleNightMode = onToggleNightMode,
-                                    selectedPlaylist = selectedPlaylist,
-                                    songsInSelectedPlaylist = songsInSelectedPlaylist,
-                                    activeSection = activeLibrarySection,
-                                    onSectionChange = { activeLibrarySection = it },
-                                    onPlaySong = { s, list -> viewModel.playSong(s, list) },
-                                    onSelectPlaylist = { viewModel.selectPlaylist(it) },
-                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true },
-                                    onDeletePlaylist = { viewModel.deletePlaylist(it) },
-                                    onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
-                                    onDeleteSong = { viewModel.deleteSong(it) },
-                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                                    currentSong = currentSong,
-                                    isPlaying = isPlaying,
-                                    modifier = Modifier.fillMaxSize(),
-                                    onAddSongsToPlaylist = { songsList, playlist ->
-                                        songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                                    },
-                                    onTriggerEqualizer = { showEqualizerPanel = true },
-                                    onTriggerTheme = { showGlobalThemeDialog = true },
-                                    onTriggerSleepTimer = { showSleepTimerMenu = true }
-                                )
-                                
-                                "search" -> SearchScreen(
-                                    songs = filteredSongs,
-                                    query = searchQuery,
-                                    isNightMode = isNightMode,
-                                    onToggleNightMode = onToggleNightMode,
-                                    onQueryChange = { viewModel.updateSearchQuery(it) },
-                                    onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
-                                    onDeleteSong = { viewModel.deleteSong(it) },
-                                    onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
-                                    currentSong = currentSong,
-                                    isPlaying = isPlaying,
-                                    modifier = Modifier.fillMaxSize(),
-                                    playlists = playlists,
-                                    onAddSongsToPlaylist = { songsList, playlist ->
-                                        songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
-                                    },
-                                    onCreatePlaylistRequest = { showCreatePlaylistInput = true },
-                                    onTriggerTheme = { showGlobalThemeDialog = true },
-                                    onTriggerSleepTimer = { showSleepTimerMenu = true },
-                                    onTriggerEqualizer = { showEqualizerPanel = true }
-                                )
+                            // Tab router with smooth, responsive fade transitions to eliminate harsh flashing
+                            AnimatedContent(
+                                targetState = currentTab,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(300, easing = LinearOutSlowInEasing)) togetherWith
+                                            fadeOut(animationSpec = tween(250, easing = LinearOutSlowInEasing))
+                                },
+                                label = "TabRouterWidescreen"
+                            ) { targetTab ->
+                                when (targetTab) {
+                                    "home" -> HomeScreen(
+                                        favoriteSongs = favoriteSongs,
+                                        lastAdded = lastAdded,
+                                        allSongsList = allSongs,
+                                        currentSong = currentSong,
+                                        isPlaying = isPlaying,
+                                        onPlaySong = { s -> viewModel.playSong(s, allSongs) },
+                                        onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                        isNightMode = isNightMode,
+                                        onToggleNightMode = onToggleNightMode,
+                                        onTriggerTheme = { showGlobalThemeDialog = true },
+                                        onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                        onTriggerEqualizer = { showEqualizerPanel = true },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    
+                                    "library" -> LibraryScreen(
+                                        songs = allSongs,
+                                        playlists = playlists,
+                                        isNightMode = isNightMode,
+                                        onToggleNightMode = onToggleNightMode,
+                                        selectedPlaylist = selectedPlaylist,
+                                        songsInSelectedPlaylist = songsInSelectedPlaylist,
+                                        activeSection = activeLibrarySection,
+                                        onSectionChange = { activeLibrarySection = it },
+                                        onPlaySong = { s, list -> viewModel.playSong(s, list) },
+                                        onSelectPlaylist = { viewModel.selectPlaylist(it) },
+                                        onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                        onDeletePlaylist = { viewModel.deletePlaylist(it) },
+                                        onRemoveSongFromPlaylist = { pid, sid -> viewModel.removeSongFromPlaylist(pid, sid) },
+                                        onDeleteSong = { viewModel.deleteSong(it) },
+                                        onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                        currentSong = currentSong,
+                                        isPlaying = isPlaying,
+                                        modifier = Modifier.fillMaxSize(),
+                                        onAddSongsToPlaylist = { songsList, playlist ->
+                                            songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                        },
+                                        onTriggerEqualizer = { showEqualizerPanel = true },
+                                        onTriggerTheme = { showGlobalThemeDialog = true },
+                                        onTriggerSleepTimer = { showSleepTimerMenu = true }
+                                    )
+                                    
+                                    "search" -> SearchScreen(
+                                        songs = filteredSongs,
+                                        query = searchQuery,
+                                        isNightMode = isNightMode,
+                                        onToggleNightMode = onToggleNightMode,
+                                        onQueryChange = { viewModel.updateSearchQuery(it) },
+                                        onPlaySong = { s -> viewModel.playSong(s, filteredSongs) },
+                                        onDeleteSong = { viewModel.deleteSong(it) },
+                                        onAddToPlaylistRequest = { s -> showAddToPlaylistSelector = s },
+                                        currentSong = currentSong,
+                                        isPlaying = isPlaying,
+                                        modifier = Modifier.fillMaxSize(),
+                                        playlists = playlists,
+                                        onAddSongsToPlaylist = { songsList, playlist ->
+                                            songsList.forEach { s -> viewModel.addSongToPlaylist(playlist.id, s.id) }
+                                        },
+                                        onCreatePlaylistRequest = { showCreatePlaylistInput = true },
+                                        onTriggerTheme = { showGlobalThemeDialog = true },
+                                        onTriggerSleepTimer = { showSleepTimerMenu = true },
+                                        onTriggerEqualizer = { showEqualizerPanel = true }
+                                    )
+                                }
                             }
                         }
 

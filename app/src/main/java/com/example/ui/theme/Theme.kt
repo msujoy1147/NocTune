@@ -8,6 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.runtime.getValue
 
 data class AppColors(
     val deepEspresso: Color,
@@ -112,77 +116,86 @@ fun NocTuneTheme(
     }
 
     val isBgDark = isColorDark(finalBgColor)
-    val appColors: AppColors
-    val colorScheme: androidx.compose.material3.ColorScheme
 
-    if (isBgDark) {
-        val deepEspressoVal = finalBgColor
-        val darkMochaVal = blendColor(finalBgColor, Color.White, 0.08f * themeBrightness + 0.02f)
-        
-        // Scale action components and typography
-        val coffeeBrownVal = blendColor(CoffeeBrown, targetBlack, 0.45f * (1f - themeBrightness))
-        val softLatteVal = blendColor(SoftLatte, targetBlack, 0.45f * (1f - themeBrightness))
-        val warmCreamVal = blendColor(Color(0xFFE8E5EE), Color(0xFF807A8A), 1f - themeBrightness)
-        val secondaryTextVal = blendColor(Color(0xFFCAC5D6), Color(0xFF4C4656), 1f - themeBrightness)
+    val targetDeepEspresso = finalBgColor
+    val targetDarkMocha = if (isBgDark) {
+        blendColor(finalBgColor, Color.White, 0.08f * themeBrightness + 0.02f)
+    } else {
+        blendColor(finalBgColor, Color.Black, 0.06f * themeBrightness + 0.02f)
+    }
+    
+    val targetCoffeeBrown = if (isBgDark) {
+        blendColor(CoffeeBrown, targetBlack, 0.45f * (1f - themeBrightness))
+    } else {
+        blendColor(CoffeeBrown, targetWhite, 0.4f * (1f - themeBrightness))
+    }
+    
+    val targetSoftLatte = if (isBgDark) {
+        blendColor(SoftLatte, targetBlack, 0.45f * (1f - themeBrightness))
+    } else {
+        blendColor(SoftLatte, targetWhite, 0.4f * (1f - themeBrightness))
+    }
+    
+    val targetWarmCream = if (isBgDark) {
+        blendColor(Color(0xFFE8E5EE), Color(0xFF807A8A), 1f - themeBrightness)
+    } else {
+        blendColor(Color(0xFF140D2B), Color(0xFF7E7A8A), 1f - themeBrightness)
+    }
+    
+    val targetSecondaryText = if (isBgDark) {
+        blendColor(Color(0xFFCAC5D6), Color(0xFF4C4656), 1f - themeBrightness)
+    } else {
+        blendColor(Color(0xFF6E6E73), Color(0xFF9FA0A5), 1f - themeBrightness)
+    }
 
-        appColors = AppColors(
-            deepEspresso = deepEspressoVal,
-            darkMocha = darkMochaVal,
-            coffeeBrown = coffeeBrownVal,
-            softLatte = softLatteVal,
-            warmCream = warmCreamVal,
-            secondaryText = secondaryTextVal,
-            isNight = true,
-            themeBrightness = themeBrightness
-        )
-        
-        colorScheme = DarkColorScheme.copy(
-            primary = coffeeBrownVal,
-            secondary = softLatteVal,
-            tertiary = warmCreamVal,
-            background = deepEspressoVal,
-            surface = darkMochaVal,
-            onPrimary = warmCreamVal,
-            onSecondary = deepEspressoVal,
-            onTertiary = deepEspressoVal,
-            onBackground = warmCreamVal,
-            onSurface = warmCreamVal,
-            surfaceVariant = darkMochaVal,
-            onSurfaceVariant = secondaryTextVal
+    // Animate every color smoothly to make theme switches elegant and cohesive across screen content
+    val animDeepEspresso by animateColorAsState(targetValue = targetDeepEspresso, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "deepEspresso")
+    val animDarkMocha by animateColorAsState(targetValue = targetDarkMocha, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "darkMocha")
+    val animCoffeeBrown by animateColorAsState(targetValue = targetCoffeeBrown, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "coffeeBrown")
+    val animSoftLatte by animateColorAsState(targetValue = targetSoftLatte, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "softLatte")
+    val animWarmCream by animateColorAsState(targetValue = targetWarmCream, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "warmCream")
+    val animSecondaryText by animateColorAsState(targetValue = targetSecondaryText, animationSpec = tween(durationMillis = 400, easing = LinearOutSlowInEasing), label = "secondaryText")
+
+    val appColors = AppColors(
+        deepEspresso = animDeepEspresso,
+        darkMocha = animDarkMocha,
+        coffeeBrown = animCoffeeBrown,
+        softLatte = animSoftLatte,
+        warmCream = animWarmCream,
+        secondaryText = animSecondaryText,
+        isNight = isBgDark,
+        themeBrightness = themeBrightness
+    )
+
+    val colorScheme = if (isBgDark) {
+        DarkColorScheme.copy(
+            primary = animCoffeeBrown,
+            secondary = animSoftLatte,
+            tertiary = animWarmCream,
+            background = animDeepEspresso,
+            surface = animDarkMocha,
+            onPrimary = animWarmCream,
+            onSecondary = animDeepEspresso,
+            onTertiary = animDeepEspresso,
+            onBackground = animWarmCream,
+            onSurface = animWarmCream,
+            surfaceVariant = animDarkMocha,
+            onSurfaceVariant = animSecondaryText
         )
     } else {
-        val deepEspressoVal = finalBgColor
-        val darkMochaVal = blendColor(finalBgColor, Color.Black, 0.06f * themeBrightness + 0.02f)
-        
-        val coffeeBrownVal = blendColor(CoffeeBrown, targetWhite, 0.4f * (1f - themeBrightness))
-        val softLatteVal = blendColor(SoftLatte, targetWhite, 0.4f * (1f - themeBrightness))
-        val warmCreamVal = blendColor(Color(0xFF140D2B), Color(0xFF7E7A8A), 1f - themeBrightness)
-        val secondaryTextVal = blendColor(Color(0xFF6E6E73), Color(0xFF9FA0A5), 1f - themeBrightness)
-
-        appColors = AppColors(
-            deepEspresso = deepEspressoVal,
-            darkMocha = darkMochaVal,
-            coffeeBrown = coffeeBrownVal,
-            softLatte = softLatteVal,
-            warmCream = warmCreamVal,
-            secondaryText = secondaryTextVal,
-            isNight = false,
-            themeBrightness = themeBrightness
-        )
-        
-        colorScheme = LightColorScheme.copy(
-            primary = coffeeBrownVal,
-            secondary = softLatteVal,
-            tertiary = warmCreamVal,
-            background = deepEspressoVal,
-            surface = darkMochaVal,
+        LightColorScheme.copy(
+            primary = animCoffeeBrown,
+            secondary = animSoftLatte,
+            tertiary = animWarmCream,
+            background = animDeepEspresso,
+            surface = animDarkMocha,
             onPrimary = Color.White,
             onSecondary = Color.White,
-            onTertiary = deepEspressoVal,
-            onBackground = warmCreamVal,
-            onSurface = warmCreamVal,
-            surfaceVariant = darkMochaVal,
-            onSurfaceVariant = secondaryTextVal
+            onTertiary = animDeepEspresso,
+            onBackground = animWarmCream,
+            onSurface = animWarmCream,
+            surfaceVariant = animDarkMocha,
+            onSurfaceVariant = animSecondaryText
         )
     }
 
