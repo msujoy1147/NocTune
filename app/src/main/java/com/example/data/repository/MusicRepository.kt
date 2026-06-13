@@ -26,11 +26,12 @@ class MusicRepository(
     val allPlaylists: Flow<List<PlaylistEntity>> = songDao.getAllPlaylists()
 
     suspend fun initDefaultGenerativeTracks() = withContext(Dispatchers.IO) {
-        // Automatically delete all songs to keep the application 100% lightweight, beautiful, and light-speed as requested.
+        // Stop seeding default generative ambient tracks as requested.
+        // Also clear any existing ones from the localized database to keep the music player 100% clean.
         try {
-            songDao.deleteAllSongs()
+            songDao.deleteGenerativeSongs()
         } catch (e: Exception) {
-            Log.e("MusicRepository", "Failed to clear all songs", e)
+            Log.e("MusicRepository", "Failed to delete existing generative tracks", e)
         }
     }
 

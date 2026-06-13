@@ -42,6 +42,9 @@ interface SongDao {
     @Query("DELETE FROM songs WHERE isGenerative = 0")
     suspend fun deleteScannedSongs()
 
+    @Query("DELETE FROM songs WHERE isGenerative = 1")
+    suspend fun deleteGenerativeSongs()
+
     @Query("DELETE FROM songs")
     suspend fun deleteAllSongs()
 
